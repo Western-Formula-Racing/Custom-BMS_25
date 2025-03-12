@@ -1,6 +1,7 @@
 #include "main.h"
 #include "torch_temp_sense.h"
-#include "torch_stm32.h"
+#include "torch_main.h"
+#include <math.h>
 
 void read_thermistors(float *thermistorArray_ptr)
 {
@@ -240,7 +241,6 @@ void read_thermistors(float *thermistorArray_ptr)
 	thermistorRawADC[17] = 0;
 	
 	// ADD MUX DISABLE ON FINAL BOARD
-	//HAL_ADC_Stop(&hadc1);
 	
 	for(uint8_t i = 0; i < 18; i++) {
 		thermistorVoltage[i] = (thermistorRawADC[i] / 4095.0) * 3.3;
@@ -249,4 +249,54 @@ void read_thermistors(float *thermistorArray_ptr)
 	for(uint8_t i = 0; i < 18; i++) {
 		*(thermistorArray_ptr + i) = thermistorVoltage[i];
 	}
+}
+
+void compute_resistance(float *thermistorVoltage_ptr)
+{
+	float thermistorResistance[THERM_QTY];
+	uint16_t Rpu = 10000;			// Thermistor pull up resistor
+	float Rmw = 0;					// Trace resistance on module board (UPDATE; different for each thermistor)
+	float Rmc = 0.03;				// Module board connector resistance
+	float Rec = 0.03;				// Embedded board connector resistance
+	float Rew = 0;					// Trace resistance on embedded board (UPDATE; different for each thermistor)
+	float Req = Rpu + Rmc + Rec;	// Equivalent resistance (UPDATE; different for each thermistor)
+
+	// MAKE i < THERM_QTY instead of i < 16 on final board
+	for(uint8_t i = 0; i < 16; i++) { thermistorResistance[i] = (*(thermistorVoltage_ptr + i)*Req)/(3.3 - *(thermistorVoltage_ptr + i)); }
+
+	// MAKE i < THERM_QTY instead of i < 16 on final board
+	for(uint8_t i = 0; i < 16; i++) { *(thermistorVoltage_ptr + i) = thermistorResistance[i]; }
+}
+
+void compute_temperature(float *thermistorResistance_ptr)
+{
+	float temperature[THERM_QTY];
+	float A = 0.003354016;
+	float B = 0.000256985;
+	float C = 0.000002620131;
+	float D = 0.00000006383091;
+	uint16_t R25 = 10000;
+
+	// MAKE i < THERM_QTY instead of i < 16 on final board
+	for(uint8_t i = 0; i < 16; i++) {
+		temperature[i] = (1/(A +
+							 B*logf(*(thermistorResistance_ptr + i)/R25) +
+							 C*powf(logf(*(thermistorResistance_ptr + i)/R25), 2) +
+							 D*powf(logf(*(thermistorResistance_ptr + i)/R25), 3))) - 273.15;
+	}
+	// MAKE i < THERM_QTY instead of i < 16 on final board
+	for(uint8_t i = 0; i < 16; i++) { *(thermistorResistance_ptr + i) = temperature[i]; }
+}
+
+void temperature_sense(float *temperature_ptr)
+{
+	float thermistorArray[THERM_QTY];
+
+	read_thermistors(thermistorArray);
+
+	compute_resistance(thermistorArray);
+
+	compute_temperature(thermistorArray);
+
+	for(uint8_t i = 0; i < 16; i++) { *(temperature_ptr + i) = thermistorArray[i]; }
 }

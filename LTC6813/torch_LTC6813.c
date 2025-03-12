@@ -1,5 +1,6 @@
 #include "main.h"
 #include "torch_LTC6813.h"
+#include "torch_main.h"
 
 uint16_t PEC15_table[256];
 uint16_t CRC15_Poly = 0x4599;

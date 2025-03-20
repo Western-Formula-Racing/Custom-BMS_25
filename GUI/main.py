@@ -106,7 +106,7 @@ def draw_sparkline(canvas, data, min_val, max_val):
     elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "temperature":
         text = f"{raw_value}°C"
     elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "current":
-        text = f"{raw_value:.1f} mA"
+        text = f"{raw_value:.1f}"
     elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "resistor":
         text = f"{raw_value}°C"
     else:

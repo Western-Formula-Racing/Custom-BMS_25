@@ -1,16 +1,36 @@
+# main.py
 import tkinter as tk
 import random
 import matplotlib
+import queue
+from multiprocessing import Process, Queue
+import can_listener
 
 matplotlib.use("Agg")  # We won't use an embedded Matplotlib window for this approach
 
+# Material Design Color Palette
+BG_COLOR = "#000000"          # Main background - black
+SECONDARY_BG = "#212121"      # Secondary background - dark gray
+CELL_BG = "#424242"           # Cell background - medium dark gray
+ACCENT_COLOR = "#ff9800"      # Accent color - material orange
+TEXT_COLOR = "#ffffff"        # Text color - white
+
 # Global threshold variables
-VOLTAGE_HIGH_THRESHOLD = 4
+VOLTAGE_HIGH_THRESHOLD = 3.7
 VOLTAGE_LOW_THRESHOLD = 2.5
 TEMP_HIGH_THRESHOLD = 60
 TEMP_LOW_THRESHOLD = 0
 
-FLASH_COLOR = "yellow"  # color used for flashing warning
+CURRENT_HIGH_THRESHOLD = 100
+CURRENT_LOW_THRESHOLD = 0
+RESISTOR_TEMP_HIGH_THRESHOLD = 60
+RESISTOR_TEMP_LOW_THRESHOLD = 0
+
+FLASH_COLOR = ACCENT_COLOR  # Using accent color for flashing warnings
+
+# Global queue for CAN messages.
+# (This queue is created in main.py and shared with the CAN listener process.)
+can_queue = Queue()
 
 
 def coolwarm_color(value, low, high):
@@ -40,7 +60,7 @@ def coolwarm_color(value, low, high):
 def draw_sparkline(canvas, data, min_val, max_val):
     """
     Draws a small sparkline on the given canvas using the values in `data`.
-    The sparkline is drawn in a 50%-opaque white (#7F7F7F) over the black canvas.
+    The sparkline is drawn in a 50%-opaque gray over the canvas.
     Additionally, the most recent raw value is overlaid in the center.
     """
     canvas.delete("all")  # clear previous drawing
@@ -48,13 +68,20 @@ def draw_sparkline(canvas, data, min_val, max_val):
     width = int(canvas.cget("width"))
     height = int(canvas.cget("height"))
 
-    # If there's not enough data for a line, still display the raw value.
     if len(data) < 2:
         if data:
             raw_value = data[-1]
-            text = f"{raw_value:.3f}" if (
-                        hasattr(canvas, "sensor_type") and canvas.sensor_type == "voltage") else f"{raw_value}°C"
-            canvas.create_text(width // 2, height // 2, text=text, fill="white")
+            if hasattr(canvas, "sensor_type") and canvas.sensor_type == "voltage":
+                text = f"{raw_value:.3f}"
+            elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "temperature":
+                text = f"{raw_value}°C"
+            elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "current":
+                text = f"{raw_value:.1f}"
+            elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "resistor":
+                text = f"{raw_value}°C"
+            else:
+                text = str(raw_value)
+            canvas.create_text(width // 2, height // 2, text=text, fill=TEXT_COLOR)
         return
 
     points = []
@@ -63,7 +90,6 @@ def draw_sparkline(canvas, data, min_val, max_val):
 
     for i, val in enumerate(data):
         x = i * step_x
-        # Clamp val between min_val and max_val
         if val < min_val:
             val = min_val
         if val > max_val:
@@ -73,104 +99,106 @@ def draw_sparkline(canvas, data, min_val, max_val):
         points.append(x)
         points.append(y)
 
-    # Draw the sparkline with 50% transparency (simulated using #7F7F7F)
     canvas.create_line(points, fill="#7F7F7F", width=1.5)
-
-    # Draw the raw value in the center
     raw_value = data[-1]
     if hasattr(canvas, "sensor_type") and canvas.sensor_type == "voltage":
         text = f"{raw_value:.3f}"
-    else:
+    elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "temperature":
         text = f"{raw_value}°C"
-    canvas.create_text(width // 2, height // 2, text=text, fill="white")
+    elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "current":
+        text = f"{raw_value:.1f} mA"
+    elif hasattr(canvas, "sensor_type") and canvas.sensor_type == "resistor":
+        text = f"{raw_value}°C"
+    else:
+        text = str(raw_value)
+    canvas.create_text(width // 2, height // 2, text=text, fill=TEXT_COLOR)
 
 
 class BMSSimulatorGUI:
-    def __init__(self, root):
+    def __init__(self, root, can_queue):
         self.root = root
+        self.can_queue = can_queue  # Use the shared CAN queue
         self.root.title("BMS CAN Messaging GUI")
+        self.root.configure(bg=BG_COLOR)
 
         # Global total voltage label at the top
-        self.global_total_voltage_label = tk.Label(root, text="Global Total Voltage: 0.000")
+        self.global_total_voltage_label = tk.Label(root, text="Global Total Voltage: 0.000", bg=BG_COLOR, fg=ACCENT_COLOR)
         self.global_total_voltage_label.pack(pady=5)
 
-        # -- Create a scrollable container ------------------------------------
-        container = tk.Frame(root)
+        # Create a scrollable container
+        container = tk.Frame(root, bg=BG_COLOR)
         container.pack(fill="both", expand=True)
 
-        self.canvas = tk.Canvas(container)
+        self.canvas = tk.Canvas(container, bg=BG_COLOR)
         self.canvas.pack(side="left", fill="both", expand=True)
 
         scrollbar = tk.Scrollbar(container, orient="vertical", command=self.canvas.yview)
         scrollbar.pack(side="right", fill="y")
-
         self.canvas.configure(yscrollcommand=scrollbar.set)
 
         # This frame goes inside the canvas
-        self.scrollable_frame = tk.Frame(self.canvas)
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
+        self.scrollable_frame = tk.Frame(self.canvas, bg=BG_COLOR)
+        self.scrollable_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        # ----------------------------------------------------------------------
 
-        # For storing data and references
-        self.voltage_frames = []  # [module][row][col] -> the Frame containing sparkline
-        self.temp_frames = []  # [module][row][col] -> the Frame containing sparkline
+        # Data structures for the grids
+        self.voltage_frames = []  # For Voltage grid (modules M1-M5)
+        self.temp_frames = []     # For Temperature grid (modules M1-M5)
+        self.current_frames = []  # For Balancing Current grid (modules M1-M5)
         self.voltage_canvases = []
         self.temp_canvases = []
-
-        # Historical data storage for each sensor (up to 60 readings)
+        self.current_canvases = []
         self.voltage_history = [[[[] for _ in range(5)] for _ in range(4)] for _ in range(5)]
         self.temp_history = [[[[] for _ in range(6)] for _ in range(3)] for _ in range(5)]
+        self.current_history = [[[[] for _ in range(5)] for _ in range(4)] for _ in range(5)]
+
+        # For Resistor Temperature grids (only for modules M1 and M2)
+        self.resistor_frames_global = []  # Two sets: index 0 for M1, 1 for M2
+        self.resistor_canvases_global = []
+        self.resistor_history_global = []
 
         # Dictionary for flashing frames
         self.flashing_frames = {}
+        self.module_frames = []  # Module header frames
 
-        # Keep references to each module frame so we can update the title
-        self.module_frames = []
-
-        # Loop over 5 modules
+        # Build grids for modules M1-M5 (Voltage, Temperature, Balancing Current)
         for module in range(5):
-            # LabelFrame for the module (title includes total voltage and average temperature)
-            module_frame = tk.LabelFrame(
-                self.scrollable_frame,
-                text=f"Module {module + 1} - Total Voltage: 0.000 - Avg Temp: 0.0°C",
-                padx=5, pady=5
-            )
+            module_frame = tk.LabelFrame(self.scrollable_frame,
+                                         text=f"Module {module + 1} - Total Voltage: 0.000 - Avg Temp: 0.0°C",
+                                         bg=SECONDARY_BG, fg=ACCENT_COLOR, padx=5, pady=5)
             module_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
             self.module_frames.append(module_frame)
 
-            # Arrays for the frames/canvases in this module
             mod_volt_frames = []
             mod_volt_canvases = []
             mod_temp_frames = []
             mod_temp_canvases = []
+            mod_current_frames = []
+            mod_current_canvases = []
 
-            # Voltage grid: 5 columns x 4 rows (20 cells)
-            voltage_frame = tk.LabelFrame(module_frame, text="Voltage (5x4 grid)", padx=5, pady=5)
+            # Voltage grid: 5 columns x 4 rows (cells labeled V1 ... V20)
+            voltage_frame = tk.LabelFrame(module_frame, text="Voltage (5x4 grid, V)",
+                                          bg=SECONDARY_BG, fg=ACCENT_COLOR, padx=5, pady=5)
             voltage_frame.grid(row=0, column=0, padx=5, pady=5)
+            volt_counter = 1
             for row in range(4):
                 row_frames = []
                 row_canvases = []
                 for col in range(5):
-                    # Each cell: a Frame with background color plus a Canvas for the sparkline
-                    cell_frame = tk.Frame(voltage_frame, width=80, height=30, bg="white", relief=tk.RIDGE,
-                                          borderwidth=2)
-                    cell_frame.grid_propagate(False)  # keep fixed size
+                    cell_frame = tk.Frame(voltage_frame, width=80, height=30, bg=CELL_BG,
+                                          relief=tk.RIDGE, borderwidth=2)
+                    cell_frame.grid_propagate(False)
                     cell_frame.grid(row=row, column=col, padx=2, pady=2)
-
-                    # Create a Canvas for sparkline
-                    c = tk.Canvas(cell_frame, width=80, height=30, bg="black", highlightthickness=0)
+                    c = tk.Canvas(cell_frame, width=80, height=30, bg=BG_COLOR, highlightthickness=0)
                     c.pack(fill="both", expand=True)
-
-                    # Attach sensor info for updating raw value
+                    tag = f"V{volt_counter}"
+                    label = tk.Label(cell_frame, text=tag, bg=CELL_BG, fg=TEXT_COLOR, font=("Arial", 8))
+                    label.place(x=2, y=2)
+                    volt_counter += 1
                     c.sensor_type = "voltage"
                     c.module = module
                     c.row = row
                     c.col = col
-
                     row_frames.append(cell_frame)
                     row_canvases.append(c)
                 mod_volt_frames.append(row_frames)
@@ -178,25 +206,29 @@ class BMSSimulatorGUI:
             self.voltage_frames.append(mod_volt_frames)
             self.voltage_canvases.append(mod_volt_canvases)
 
-            # Temperature grid: 6 columns x 3 rows (18 sensors)
-            temp_frame = tk.LabelFrame(module_frame, text="Temperature (6x3 grid)", padx=5, pady=5)
+            # Temperature grid: 6 columns x 3 rows (cells labeled T1 ... T18)
+            temp_frame = tk.LabelFrame(module_frame, text="Temperature (6x3 grid)",
+                                       bg=SECONDARY_BG, fg=ACCENT_COLOR, padx=5, pady=5)
             temp_frame.grid(row=0, column=1, padx=5, pady=5)
+            temp_counter = 1
             for row in range(3):
                 row_frames = []
                 row_canvases = []
                 for col in range(6):
-                    cell_frame = tk.Frame(temp_frame, width=80, height=30, bg="white", relief=tk.RIDGE, borderwidth=2)
+                    cell_frame = tk.Frame(temp_frame, width=80, height=30, bg=CELL_BG,
+                                          relief=tk.RIDGE, borderwidth=2)
                     cell_frame.grid_propagate(False)
                     cell_frame.grid(row=row, column=col, padx=2, pady=2)
-
-                    c = tk.Canvas(cell_frame, width=80, height=30, bg="black", highlightthickness=0)
+                    c = tk.Canvas(cell_frame, width=80, height=30, bg=BG_COLOR, highlightthickness=0)
                     c.pack(fill="both", expand=True)
-
+                    tag = f"T{temp_counter}"
+                    label = tk.Label(cell_frame, text=tag, bg=CELL_BG, fg=TEXT_COLOR, font=("Arial", 8))
+                    label.place(x=2, y=2)
+                    temp_counter += 1
                     c.sensor_type = "temperature"
                     c.module = module
                     c.row = row
                     c.col = col
-
                     row_frames.append(cell_frame)
                     row_canvases.append(c)
                 mod_temp_frames.append(row_frames)
@@ -204,14 +236,86 @@ class BMSSimulatorGUI:
             self.temp_frames.append(mod_temp_frames)
             self.temp_canvases.append(mod_temp_canvases)
 
-        # Begin periodic updates
-        self.update_values()
+            # Balancing Current grid: 5 columns x 4 rows (cells labeled C1 ... C20)
+            current_frame = tk.LabelFrame(module_frame, text="Balancing Current (5x4 grid, mA)",
+                                          bg=SECONDARY_BG, fg=ACCENT_COLOR, padx=5, pady=5)
+            current_frame.grid(row=1, column=0, padx=5, pady=5)
+            current_counter = 1
+            for row in range(4):
+                row_frames = []
+                row_canvases = []
+                for col in range(5):
+                    cell_frame = tk.Frame(current_frame, width=80, height=30, bg=CELL_BG,
+                                          relief=tk.RIDGE, borderwidth=2)
+                    cell_frame.grid_propagate(False)
+                    cell_frame.grid(row=row, column=col, padx=2, pady=2)
+                    c = tk.Canvas(cell_frame, width=80, height=30, bg=BG_COLOR, highlightthickness=0)
+                    c.pack(fill="both", expand=True)
+                    tag = f"C{current_counter}"
+                    label = tk.Label(cell_frame, text=tag, bg=CELL_BG, fg=TEXT_COLOR, font=("Arial", 8))
+                    label.place(x=2, y=2)
+                    current_counter += 1
+                    c.sensor_type = "current"
+                    c.module = module
+                    c.row = row
+                    c.col = col
+                    row_frames.append(cell_frame)
+                    row_canvases.append(c)
+                mod_current_frames.append(row_frames)
+                mod_current_canvases.append(row_canvases)
+            self.current_frames.append(mod_current_frames)
+            self.current_canvases.append(mod_current_canvases)
+
+        # Global Resistor Temperature grids (only for modules M1 and M2)
+        resistor_global_frame = tk.LabelFrame(self.scrollable_frame, text="Resistor Temperature (2 sets)",
+                                              bg=SECONDARY_BG, fg=ACCENT_COLOR, padx=5, pady=5)
+        resistor_global_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        valid_tags = ["R1", "R2", "R3", "R4", "R5", "R7", "R8", "R9", "R10", "R11", "R12",
+                      "R13", "R14", "R15", "R17", "R18", "R19", "R20"]
+        rows = 3
+        cols = 6
+        for set_index in range(2):  # For M1 and M2
+            set_frame = tk.LabelFrame(resistor_global_frame, text=f"Resistor Set {set_index + 1}",
+                                      bg=SECONDARY_BG, fg=ACCENT_COLOR, padx=5, pady=5)
+            set_frame.pack(side=tk.LEFT, padx=10, pady=5)
+            set_frames = []
+            set_canvases = []
+            set_history = []
+            resistor_counter = 0
+            for row in range(rows):
+                row_frames = []
+                row_canvases = []
+                row_history = []
+                for col in range(cols):
+                    tag = valid_tags[resistor_counter]
+                    cell_frame = tk.Frame(set_frame, width=80, height=30, bg=CELL_BG,
+                                          relief=tk.RIDGE, borderwidth=2)
+                    cell_frame.grid_propagate(False)
+                    cell_frame.grid(row=row, column=col, padx=2, pady=2)
+                    c = tk.Canvas(cell_frame, width=80, height=30, bg=BG_COLOR, highlightthickness=0)
+                    c.pack(fill="both", expand=True)
+                    label = tk.Label(cell_frame, text=tag, bg=CELL_BG, fg=TEXT_COLOR, font=("Arial", 8))
+                    label.place(x=2, y=2)
+                    c.sensor_type = "resistor"
+                    c.module = set_index  # 0 for M1, 1 for M2
+                    c.row = row
+                    c.col = col
+                    row_frames.append(cell_frame)
+                    row_canvases.append(c)
+                    row_history.append([])
+                    resistor_counter += 1
+                set_frames.append(row_frames)
+                set_canvases.append(row_canvases)
+                set_history.append(row_history)
+            self.resistor_frames_global.append(set_frames)
+            self.resistor_canvases_global.append(set_canvases)
+            self.resistor_history_global.append(set_history)
+
+        # Start polling the CAN message queue
+        self.poll_can_messages()
 
     def flash_toggle(self, frame):
-        """
-        Toggles the flashing state of a frame by alternating between the base color
-        and FLASH_COLOR.
-        """
+        """Toggle flashing for a frame."""
         if frame not in self.flashing_frames:
             return
         flash_info = self.flashing_frames[frame]
@@ -223,9 +327,7 @@ class BMSSimulatorGUI:
         flash_info["job"] = self.root.after(500, lambda: self.flash_toggle(frame))
 
     def start_flashing(self, frame, base_color):
-        """
-        Begins flashing for the given frame if not already active.
-        """
+        """Begin flashing for the given frame."""
         if frame in self.flashing_frames:
             self.flashing_frames[frame]["base_color"] = base_color
             return
@@ -233,9 +335,7 @@ class BMSSimulatorGUI:
         self.flash_toggle(frame)
 
     def stop_flashing(self, frame, base_color):
-        """
-        Stops flashing on the given frame and resets its background to the base color.
-        """
+        """Stop flashing for the given frame."""
         if frame in self.flashing_frames:
             job = self.flashing_frames[frame].get("job")
             if job:
@@ -243,87 +343,114 @@ class BMSSimulatorGUI:
             frame.config(bg=base_color)
             del self.flashing_frames[frame]
 
-    def update_values(self):
+    def update_from_can_message(self, msg):
         """
-        Simulates new sensor readings, updates the sparkline and raw value display,
-        color-codes (and flashes) cells, computes module-level total voltage and average temperature,
-        and updates the global total voltage.
+        Process a CAN message tuple of the form:
+            (module, cell, reading)
+        module: e.g., "M1", "M2", ..., "M5" (for Voltage, Temperature, Current)
+                For resistor readings, only "M1" or "M2" are valid.
+        cell: e.g., "V1", "T1", "C1", "R1", etc.
+        reading: numeric value
         """
-        global_total_voltage = 0.0
+        mod_str, cell_str, reading = msg
+        # For non-resistor cells, module index is int(mod_str[1:]) - 1.
+        if cell_str.startswith("V"):
+            module_index = int(mod_str[1:]) - 1
+            cell_index = int(cell_str[1:]) - 1  # 0-indexed
+            row = cell_index // 5
+            col = cell_index % 5
+            hist = self.voltage_history[module_index][row][col]
+            hist.append(reading)
+            if len(hist) > 60:
+                hist.pop(0)
+            base_color = coolwarm_color(reading, VOLTAGE_LOW_THRESHOLD, VOLTAGE_HIGH_THRESHOLD)
+            frame = self.voltage_frames[module_index][row][col]
+            if reading < VOLTAGE_LOW_THRESHOLD or reading > VOLTAGE_HIGH_THRESHOLD:
+                self.start_flashing(frame, base_color)
+            else:
+                self.stop_flashing(frame, base_color)
+                frame.config(bg=base_color)
+            canvas = self.voltage_canvases[module_index][row][col]
+            draw_sparkline(canvas, hist, VOLTAGE_LOW_THRESHOLD, VOLTAGE_HIGH_THRESHOLD)
+        elif cell_str.startswith("T"):
+            module_index = int(mod_str[1:]) - 1
+            cell_index = int(cell_str[1:]) - 1
+            row = cell_index // 6
+            col = cell_index % 6
+            hist = self.temp_history[module_index][row][col]
+            hist.append(reading)
+            if len(hist) > 60:
+                hist.pop(0)
+            base_color = coolwarm_color(reading, TEMP_LOW_THRESHOLD, TEMP_HIGH_THRESHOLD)
+            frame = self.temp_frames[module_index][row][col]
+            if reading < TEMP_LOW_THRESHOLD or reading > TEMP_HIGH_THRESHOLD:
+                self.start_flashing(frame, base_color)
+            else:
+                self.stop_flashing(frame, base_color)
+                frame.config(bg=base_color)
+            canvas = self.temp_canvases[module_index][row][col]
+            draw_sparkline(canvas, hist, TEMP_LOW_THRESHOLD, TEMP_HIGH_THRESHOLD)
+        elif cell_str.startswith("C"):
+            module_index = int(mod_str[1:]) - 1
+            cell_index = int(cell_str[1:]) - 1
+            row = cell_index // 5
+            col = cell_index % 5
+            hist = self.current_history[module_index][row][col]
+            hist.append(reading)
+            if len(hist) > 60:
+                hist.pop(0)
+            base_color = coolwarm_color(reading, CURRENT_LOW_THRESHOLD, CURRENT_HIGH_THRESHOLD)
+            frame = self.current_frames[module_index][row][col]
+            if reading < CURRENT_LOW_THRESHOLD or reading > CURRENT_HIGH_THRESHOLD:
+                self.start_flashing(frame, base_color)
+            else:
+                self.stop_flashing(frame, base_color)
+                frame.config(bg=base_color)
+            canvas = self.current_canvases[module_index][row][col]
+            draw_sparkline(canvas, hist, CURRENT_LOW_THRESHOLD, CURRENT_HIGH_THRESHOLD)
+        elif cell_str.startswith("R"):
+            # For resistor readings, we expect module to be "M1" or "M2"
+            module_index = int(mod_str[1:]) - 1  # should be 0 or 1
+            valid_tags = ["R1", "R2", "R3", "R4", "R5", "R7", "R8", "R9", "R10",
+                          "R11", "R12", "R13", "R14", "R15", "R17", "R18", "R19", "R20"]
+            try:
+                cell_index = valid_tags.index(cell_str)
+            except ValueError:
+                return  # invalid cell tag
+            row = cell_index // 6
+            col = cell_index % 6
+            hist = self.resistor_history_global[module_index][row][col]
+            hist.append(reading)
+            if len(hist) > 60:
+                hist.pop(0)
+            base_color = coolwarm_color(reading, RESISTOR_TEMP_LOW_THRESHOLD, RESISTOR_TEMP_HIGH_THRESHOLD)
+            frame = self.resistor_frames_global[module_index][row][col]
+            if reading < RESISTOR_TEMP_LOW_THRESHOLD or reading > RESISTOR_TEMP_HIGH_THRESHOLD:
+                self.start_flashing(frame, base_color)
+            else:
+                self.stop_flashing(frame, base_color)
+                frame.config(bg=base_color)
+            canvas = self.resistor_canvases_global[module_index][row][col]
+            draw_sparkline(canvas, hist, RESISTOR_TEMP_LOW_THRESHOLD, RESISTOR_TEMP_HIGH_THRESHOLD)
 
-        for module in range(5):
-            module_voltage_sum = 0.0
-            module_temp_sum = 0.0
-            voltage_count = 0
-            temp_count = 0
-
-            # Update each voltage cell
-            for row in range(4):
-                for col in range(5):
-                    voltage = round(random.uniform(2.5, 4.0), 3)
-                    module_voltage_sum += voltage
-                    voltage_count += 1
-
-                    # Append to historical data (limit to 60 readings)
-                    hist = self.voltage_history[module][row][col]
-                    hist.append(voltage)
-                    if len(hist) > 60:
-                        hist.pop(0)
-
-                    # Determine color and flashing based on thresholds
-                    base_color = coolwarm_color(voltage, VOLTAGE_LOW_THRESHOLD, VOLTAGE_HIGH_THRESHOLD)
-                    frame = self.voltage_frames[module][row][col]
-                    if voltage < VOLTAGE_LOW_THRESHOLD or voltage > VOLTAGE_HIGH_THRESHOLD:
-                        self.start_flashing(frame, base_color)
-                    else:
-                        self.stop_flashing(frame, base_color)
-                        frame.config(bg=base_color)
-
-                    # Draw sparkline with raw value on the canvas
-                    canvas = self.voltage_canvases[module][row][col]
-                    draw_sparkline(canvas, hist, VOLTAGE_LOW_THRESHOLD, VOLTAGE_HIGH_THRESHOLD)
-
-            # Update each temperature cell
-            for row in range(3):
-                for col in range(6):
-                    temp = random.randint(5, 45)
-                    module_temp_sum += temp
-                    temp_count += 1
-
-                    hist = self.temp_history[module][row][col]
-                    hist.append(temp)
-                    if len(hist) > 60:
-                        hist.pop(0)
-
-                    base_color = coolwarm_color(temp, TEMP_LOW_THRESHOLD, TEMP_HIGH_THRESHOLD)
-                    frame = self.temp_frames[module][row][col]
-                    if temp < TEMP_LOW_THRESHOLD or temp > TEMP_HIGH_THRESHOLD:
-                        self.start_flashing(frame, base_color)
-                    else:
-                        self.stop_flashing(frame, base_color)
-                        frame.config(bg=base_color)
-
-                    canvas = self.temp_canvases[module][row][col]
-                    draw_sparkline(canvas, hist, TEMP_LOW_THRESHOLD, TEMP_HIGH_THRESHOLD)
-
-            # Update module title with computed totals
-            avg_temp = module_temp_sum / temp_count if temp_count else 0
-            self.module_frames[module].config(
-                text=(
-                    f"Module {module + 1} - "
-                    f"Total Voltage: {module_voltage_sum:.3f} - "
-                    f"Avg Temp: {avg_temp:.1f}°C"
-                )
-            )
-            global_total_voltage += module_voltage_sum
-
-        self.global_total_voltage_label.config(text=f"Global Total Voltage: {global_total_voltage:.3f}")
-
-        # Schedule next update in 1 second
-        self.root.after(1000, self.update_values)
+    def poll_can_messages(self):
+        """
+        Poll the global can_queue for new CAN messages and process them.
+        This method schedules itself to run repeatedly.
+        """
+        while not self.can_queue.empty():
+            msg = self.can_queue.get()
+            self.update_from_can_message(msg)
+        self.root.after(100, self.poll_can_messages)
 
 
 if __name__ == "__main__":
+    from multiprocessing import Process, Queue
+    # Start the CAN listener process with the shared queue
+    listener_process = Process(target=can_listener.run_can_listener, args=(can_queue,))
+    listener_process.daemon = True  # Allow the program to exit if the GUI is closed
+    listener_process.start()
+
     root = tk.Tk()
-    app = BMSSimulatorGUI(root)
+    app = BMSSimulatorGUI(root, can_queue)
     root.mainloop()

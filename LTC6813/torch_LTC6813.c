@@ -168,28 +168,6 @@ void WRCFGB(uint8_t *payload_ptr, uint8_t side)
 }
 
 
-void WRSCTRL(uint8_t *payload_ptr, uint8_t side)
-{
-	uint8_t cmd[4];
-	uint16_t cmd_PEC;
-	uint8_t registerGroupSControl[8];
-	uint16_t registerGroupSControl_PEC;
-
-	cmd[0] = 0x00;
-	cmd[1] = 0x14;
-	cmd_PEC = compute_PEC15(cmd, 2);
-	append_PEC(cmd, 2, cmd_PEC);
-
-	for(uint8_t i = 0; i < 6; i ++) {
-		registerGroupSControl[i] = *(payload_ptr + i);
-	}
-	registerGroupSControl_PEC = compute_PEC15(registerGroupSControl, 6);
-	append_PEC(registerGroupSControl, 6, registerGroupSControl_PEC);
-
-	write_cmd(cmd, registerGroupSControl, side);
-}
-
-
 void WRPWM(uint8_t *payload_ptr, uint8_t side)
 {
 	uint8_t cmd[4];
@@ -209,28 +187,6 @@ void WRPWM(uint8_t *payload_ptr, uint8_t side)
 	append_PEC(registerGroupPWM, 6, registerGroupPWM_PEC);
 
 	write_cmd(cmd, registerGroupPWM, side);
-}
-
-
-void WRPSB(uint8_t *payload_ptr, uint8_t side)
-{
-	uint8_t cmd[4];
-	uint16_t cmd_PEC;
-	uint8_t registerGroupPWMandSControl[8];
-	uint16_t registerGroupPWMandSControl_PEC;
-
-	cmd[0] = 0x00;
-	cmd[1] = 0x1C;
-	cmd_PEC = compute_PEC15(cmd, 2);
-	append_PEC(cmd, 2, cmd_PEC);
-
-	for(uint8_t i = 0; i < 6; i ++) {
-		registerGroupPWMandSControl[i] = *(payload_ptr + i);
-	}
-	registerGroupPWMandSControl_PEC = compute_PEC15(registerGroupPWMandSControl, 6);
-	append_PEC(registerGroupPWMandSControl, 6, registerGroupPWMandSControl_PEC);
-
-	write_cmd(cmd, registerGroupPWMandSControl, side);
 }
 // *** END WRITE COMMANDS ***
 
@@ -320,32 +276,7 @@ void RDCVD(uint8_t *cellVoltageRegisterGroupD_ptr, uint8_t side)
 }
 
 
-void RDCVE(uint8_t *cellVoltageRegisterGroupE_ptr, uint8_t side)
-{
-	uint8_t cmd[4];
-	uint16_t cmd_PEC;
 
-	cmd[0] = 0x00;
-	cmd[1] = 0x09;
-	cmd_PEC = compute_PEC15(cmd, 2);
-	append_PEC(cmd, 2, cmd_PEC);
-
-	read_cmd(cmd, cellVoltageRegisterGroupE_ptr, side);
-}
-
-
-void RDCVF(uint8_t *cellVoltageRegisterGroupF_ptr, uint8_t side)
-{
-	uint8_t cmd[4];
-	uint16_t cmd_PEC;
-
-	cmd[0] = 0x00;
-	cmd[1] = 0x0B;
-	cmd_PEC = compute_PEC15(cmd, 2);
-	append_PEC(cmd, 2, cmd_PEC);
-
-	read_cmd(cmd, cellVoltageRegisterGroupF_ptr, side);
-}
 
 
 void RDSTATA(uint8_t *statusRegisterGroupA_ptr, uint8_t side)
@@ -390,20 +321,6 @@ void RDAUXB(uint8_t *auxiliaryRegisterGroupB_ptr, uint8_t side)
 }
 
 
-void RDSCTRL(uint8_t *SControlRegisterGroup_ptr, uint8_t side)
-{
-	uint8_t cmd[4];
-	uint16_t cmd_PEC;
-
-	cmd[0] = 0x00;
-	cmd[1] = 0x16;
-	cmd_PEC = compute_PEC15(cmd, 2);
-	append_PEC(cmd, 2, cmd_PEC);
-
-	read_cmd(cmd, SControlRegisterGroup_ptr, side);
-}
-
-
 void RDPWM(uint8_t *PWMRegisterGroup_ptr, uint8_t side)
 {
 	uint8_t cmd[4];
@@ -415,20 +332,6 @@ void RDPWM(uint8_t *PWMRegisterGroup_ptr, uint8_t side)
 	append_PEC(cmd, 2, cmd_PEC);
 
 	read_cmd(cmd, PWMRegisterGroup_ptr, side);
-}
-
-
-void RDPSB(uint8_t *PWMandSControlRegisterGroup_ptr, uint8_t side)
-{
-	uint8_t cmd[4];
-	uint16_t cmd_PEC;
-
-	cmd[0] = 0x00;
-	cmd[1] = 0x1E;
-	cmd_PEC = compute_PEC15(cmd, 2);
-	append_PEC(cmd, 2, cmd_PEC);
-
-	read_cmd(cmd, PWMandSControlRegisterGroup_ptr, side);
 }
 // *** END READ COMMANDS ***
 

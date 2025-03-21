@@ -1,21 +1,18 @@
-#ifndef INC_TORCH_LIB_H_
-#define INC_TORCH_LIB_H_
+#ifndef INC_TORCH_STM32_H_
+#define INC_TORCH_STM32_H_
 
-// *** STM32 PERIPHERAL VARIABLES ***
 extern SPI_HandleTypeDef hspi1;
 extern SPI_HandleTypeDef hspi3;
 extern ADC_HandleTypeDef hadc1;
-//extern CAN_HandleTypeDef hcan2;
-// *** END STM32 PERIPHERAL VARIABLES ***
+extern CAN_HandleTypeDef hcan1;
+extern TIM_HandleTypeDef htim2;
 
-// *** LTC6813 VARIABLES ***
-#define CMD_LEN 4
-#define PAYLOAD_LEN 8
-#define SIDE_A 1
-#define SIDE_B 0
+extern volatile uint32_t Counter;
 
-extern uint16_t PEC15_table[256];		// PEC look up table
-extern uint16_t CRC15_Poly;				// LTC6813 PEC polynomial
+void pull_low(GPIO_TypeDef *port_ptr, uint16_t pin);
+void pull_high(GPIO_TypeDef *port_ptr, uint16_t pin);
+
+uint8_t SPI_transmit(SPI_HandleTypeDef *hspi, uint8_t *data_ptr, uint8_t dataLen);
 
 typedef struct LTC6813_registers
 {

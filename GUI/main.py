@@ -16,7 +16,7 @@ ACCENT_COLOR = "#ff9800"      # Accent color - material orange
 TEXT_COLOR = "#ffffff"        # Text color - white
 
 # Global threshold variables
-VOLTAGE_HIGH_THRESHOLD = 3.7
+VOLTAGE_HIGH_THRESHOLD = 4.2
 VOLTAGE_LOW_THRESHOLD = 2.5
 TEMP_HIGH_THRESHOLD = 60
 TEMP_LOW_THRESHOLD = 0

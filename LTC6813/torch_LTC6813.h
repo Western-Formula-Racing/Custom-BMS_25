@@ -58,47 +58,47 @@ void read_cmd(uint8_t *cmd_ptr,
 
 // *** WRITE COMMANDS ***
 //void WRCFGA(uint8_t *payload_ptr, uint8_t side);
-void WRCFGA(LTC6813 *reg_ptr, uint8_t side);
+void WRCFGA(LTC6813 *asicRegisters, uint8_t side);
 
 //void WRCFGB(uint8_t *payload_ptr, uint8_t side);
-void WRCFGB(LTC6813 *reg_ptr, uint8_t side);
+void WRCFGB(LTC6813 *asicRegisters, uint8_t side);
 
 //void WRPWM(uint8_t *payload_ptr, uint8_t side);
-void WRPWM(LTC6813 *reg_ptr, uint8_t side);
+void WRPWM(LTC6813 *asicRegisters, uint8_t side);
 // *** END WRITE COMMANDS ***
 
 // *** READ COMMANDS ***
 //void RDCFGA(uint8_t *configRegisterGroupA_ptr, uint8_t side);
-void RDCFGA(LTC6813 *reg_ptr, uint8_t side);
+void RDCFGA(LTC6813 *asicRegisters, uint8_t side);
 
 //void RDCFGB(uint8_t *configRegisterGroupB_ptr, uint8_t side);
-void RDCFGB(LTC6813 *reg_ptr, uint8_t side);
+void RDCFGB(LTC6813 *asicRegisters, uint8_t side);
 
 //void RDCVA(uint8_t *cellVoltageRegisterGroupA_ptr, uint8_t side);
-void RDCVA(LTC6813 *reg_ptr, uint8_t side);
+void RDCVA(LTC6813 *asicRegisters, uint8_t side);
 
 //void RDCVB(uint8_t *cellVoltageRegisterGroupB_ptr, uint8_t side);
-void RDCVB(LTC6813 *reg_ptr, uint8_t side);
+void RDCVB(LTC6813 *asicRegisters, uint8_t side);
 
 //void RDCVC(uint8_t *cellVoltageRegisterGroupC_ptr, uint8_t side);
-void RDCVC(LTC6813 *reg_ptr, uint8_t side)
+void RDCVC(LTC6813 *asicRegisters, uint8_t side)
 
 //void RDCVD(uint8_t *cellVoltageRegisterGroupD_ptr, uint8_t side);
-void RDCVD(LTC6813 *reg_ptr, uint8_t side);
+void RDCVD(LTC6813 *asicRegisters, uint8_t side);
 
-void RDAUXA(LTC6813 *reg_ptr, uint8_t side);
+void RDAUXA(LTC6813 *asicRegisters, uint8_t side);
 
-void RDAUXB(LTC6813 *reg_ptr, uint8_t side);
+void RDAUXB(LTC6813 *asicRegisters, uint8_t side);
 
-void RDAUXC(LTC6813 *reg_ptr, uint8_t side);
+void RDAUXC(LTC6813 *asicRegisters, uint8_t side);
 
-void RDAUXD(LTC6813 *reg_ptr, uint8_t side);
+void RDAUXD(LTC6813 *asicRegisters, uint8_t side);
 
-void RDSTATA(LTC6813 *reg_ptr, uint8_t side);
+void RDSTATA(LTC6813 *asicRegisters, uint8_t side);
 
-void RDSTATB(LTC6813 *reg_ptr, uint8_t side);
+void RDSTATB(LTC6813 *asicRegisters, uint8_t side);
 
-void RDPWM(LTC6813 *reg_ptr, uint8_t side);
+void RDPWM(LTC6813 *asicRegisters, uint8_t side);
 // *** END READ COMMANDS ***
 
 // *** ACTION COMMANDS ***

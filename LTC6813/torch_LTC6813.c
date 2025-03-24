@@ -2,6 +2,7 @@
 #include "torch_LTC6813.h"
 #include "torch_main.h"
 #include "torch_STM32.h"
+#include "torch_faults.h"
 
 // DELETE COMMENTED OUT FUNCTIONS ONCE NEW boards ARE TESTED
 
@@ -163,7 +164,7 @@ void read_cmd(uint8_t *cmd_ptr, uint8_t *receivedPayload_ptr, uint8_t sideA)
 
 	write_cmd(cmd, configRegisterGroupA, side);
 }*/
-void WRCFGA(LTC6813 *reg_ptr, uint8_t side)
+void WRCFGA(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t wrcfgaCmd[4];
 	uint16_t wrcfgaCmd_PEC;
@@ -175,7 +176,7 @@ void WRCFGA(LTC6813 *reg_ptr, uint8_t side)
 	wrcfgaCmd_PEC = compute_PEC15(wrcfgaCmd, 2);
 	append_PEC(wrcfgaCmd, 2, wrcfgaCmd_PEC);
 	
-	for(uint8_t i = 0; i < 6; i++) { wrcfgaPayload[i] = reg_ptr->configRegisterA[i]; }
+	for(uint8_t i = 0; i < 6; i++) { wrcfgaPayload[i] = asicRegisters->configRegisterA[i]; }
 	
 	wrcfgaPayload_PEC = compute_PEC15(wrcfgaPayload, 6);
 	append_PEC(wrcfgaPayload, 6, wrcfgaPayload_PEC);
@@ -210,7 +211,7 @@ void WRCFGA(LTC6813 *reg_ptr, uint8_t side)
 
 	write_cmd(cmd, configRegisterGroupB, side);
 }*/
-void WRCFGB(LTC6813 *reg_ptr, uint8_t side)
+void WRCFGB(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t wrcfgbCmd[4];
 	uint16_t wrcfgbCmd_PEC;
@@ -222,7 +223,7 @@ void WRCFGB(LTC6813 *reg_ptr, uint8_t side)
 	wrcfgbCmd_PEC = compute_PEC15(wrcfgbCmd, 2);
 	append_PEC(wrcfgbCmd, 2, wrcfgbCmd_PEC);
 	
-	for(uint8_t i = 0; i < 2; i++) { wrcfgbPayload[i] = reg_ptr->configRegisterB[i]; }
+	for(uint8_t i = 0; i < 2; i++) { wrcfgbPayload[i] = asicRegisters->configRegisterB[i]; }
 	
 	// CFGBR2 to CFGBR5 has reserved bits that're 0. That's why we're forcing them to 0
 	for(uint8_t i = 2; i < 6; i++) { wrcfgbPayload[i] = 0x00; }
@@ -254,7 +255,7 @@ void WRCFGB(LTC6813 *reg_ptr, uint8_t side)
 
 	write_cmd(cmd, registerGroupPWM, side);
 }*/
-void WRPWM(LTC6813 *reg_ptr, uint8_t side)
+void WRPWM(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t wrpwmCmd[4];
 	uint16_t wrpwmCmd_PEC;
@@ -266,7 +267,7 @@ void WRPWM(LTC6813 *reg_ptr, uint8_t side)
 	wrpwmCmd_PEC = compute_PEC15(wrpwmCmd, 2);
 	append_PEC(wrpwmCmd, 2, wrpwmCmd_PEC);
 	
-	for(uint8_t i = 0; i < 6; i++) { wrpwmPayload[i] = reg_ptr->pwmRegister[i]; }
+	for(uint8_t i = 0; i < 6; i++) { wrpwmPayload[i] = asicRegisters->pwmRegister[i]; }
 	
 	wrpwmPayload_PEC = compute_PEC15(wrpwmPayload, 6);
 	append_PEC(wrpwmPayload, 6, wrpwmPayload_PEC);
@@ -289,28 +290,35 @@ void WRPWM(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, configRegisterGroupA_ptr, side);
 }*/
-void RDCFGA(LTC6813 *reg_ptr, uint8_t side)
+void RDCFGA(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdcfgaCmd[4];
 	uint16_t rdcfgaCmd_PEC;
 	uint8_t rdcfgaPayload[8];
 	uint8_t rdcfgaPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdcfgaCmd[0] = 0x00;
 	rdcfgaCmd[1] = 0x02;
 	rdcfgaCmd_PEC = compute_PEC15(rdcfgaCmd, 2);
 	append_PEC(rdcfgaCmd, 2, rdcfgaCmd_PEC);
-
-	read_cmd(rdcfgaCmd, rdcfgaPayload, side);
 	
-	rdcfgaPayload_PECflag = verify_PEC15(rdcfgaPayload);
-	
-	if(rdcfgaPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->configRegisterA[i] = rdcfgaPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdcfgaCmd, rdcfgaPayload, side);
+		
+		rdcfgaPayload_PECflag = verify_PEC15(rdcfgaPayload);
+		
+		if(rdcfgaPayload_PECflag == 2) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->configRegisterA[i] = rdcfgaPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->configRegisterA[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
@@ -326,28 +334,35 @@ void RDCFGA(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, configRegisterGroupB_ptr, side);
 }*/
-void RDCFGB(LTC6813 *reg_ptr, uint8_t side)
+void RDCFGB(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdcfgbCmd[4];
 	uint16_t rdcfgbCmd_PEC;
 	uint8_t rdcfgbPayload[8];
 	uint8_t rdcfgbPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdcfgbCmd[0] = 0x00;
 	rdcfgbCmd[1] = 0x26;
 	rdcfgbCmd_PEC = compute_PEC15(rdcfgbCmd, 2);
 	append_PEC(rdcfgbCmd, 2, rdcfgbCmd_PEC);
 
-	read_cmd(rdcfgbCmd, rdcfgbPayload, side);
-	
-	rdcfgbPayload_PECflag = verify_PEC15(rdcfgbPayload);
-	
-	if(rdcfgbPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 2; i++) { reg_ptr->configRegisterB[i] = rdcfgbPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdcfgbCmd, rdcfgbPayload, side);
+		
+		rdcfgbPayload_PECflag = verify_PEC15(rdcfgbPayload);
+		
+		if(rdcfgbPayload_PECflag == 2) {
+			for(uint8_t i = 0; i < 2; i++) { asicRegisters->configRegisterB[i] = rdcfgbPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 2; i++) { reg_ptr->configRegisterB[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
@@ -363,28 +378,37 @@ void RDCFGB(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, cellVoltageRegisterGroupA_ptr, side);
 }*/
-void RDCVA(LTC6813 *reg_ptr, uint8_t side)
+void RDCVA(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdcvaCmd[4];
 	uint16_t rdcvaCmd_PEC;
 	uint8_t rdcvaPayload[8];
 	uint8_t rdcvaPayload_PECflag;
+	
+	uint8_t attempts = 0;
+	uint8_t registerDefaultsFlag = 0;		// Flag for whether the LTC6813 successfully ADC'd
 
 	rdcvaCmd[0] = 0x00;
 	rdcvaCmd[1] = 0x04;
 	rdcvaCmd_PEC = compute_PEC15(rdcvaCmd, 2);
 	append_PEC(rdcvaCmd, 2, rdcvaCmd_PEC);
 
-	read_cmd(rdcvaCmd, rdcvaPayload, side);
-	
-	rdcvaPayload_PECflag = verify_PEC15(rdcvaPayload);
-	
-	if(rdcvaPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->voltageRegisterA[i] = rdcvaPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdcvaCmd, rdcvaPayload, side);
+		
+		rdcvaPayload_PECflag = verify_PEC15(rdcvaPayload);
+		
+		
+		if(rdcvaPayload_PECflag == 2 && rdcvaPayload[1] != 0xFF && rdcvaPayload[3] != 0xFF && rdcvaPayload[5] != 0xFF) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->voltageRegisterA[i] = rdcvaPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->voltageRegisterA[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
@@ -400,28 +424,35 @@ void RDCVA(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, cellVoltageRegisterGroupB_ptr, side);
 }*/
-void RDCVB(LTC6813 *reg_ptr, uint8_t side)
+void RDCVB(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdcvbCmd[4];
 	uint16_t rdcvbCmd_PEC;
 	uint8_t rdcvbPayload[8];
 	uint8_t rdcvbPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdcvbCmd[0] = 0x00;
 	rdcvbCmd[1] = 0x04;
 	rdcvbCmd_PEC = compute_PEC15(rdcvbCmd, 2);
 	append_PEC(rdcvbCmd, 2, rdcvbCmd_PEC);
 
-	read_cmd(rdcvbCmd, rdcvbPayload, side);
-	
-	rdcvbPayload_PECflag = verify_PEC15(rdcvbPayload);
-	
-	if(rdcvbPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->voltageRegisterB[i] = rdcvbPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdcvbCmd, rdcvbPayload, side);
+		
+		rdcvbPayload_PECflag = verify_PEC15(rdcvbPayload);
+		
+		if(rdcvbPayload_PECflag == 2 && rdcvbPayload[1] != 0xFF && rdcvbPayload[3] != 0xFF && rdcvbPayload[5] != 0xFF) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->voltageRegisterB[i] = rdcvbPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->voltageRegisterB[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
@@ -437,28 +468,35 @@ void RDCVB(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, cellVoltageRegisterGroupC_ptr, side);
 }*/
-void RDCVC(LTC6813 *reg_ptr, uint8_t side)
+void RDCVC(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdcvcCmd[4];
 	uint16_t rdcvcCmd_PEC;
 	uint8_t rdcvcPayload[8];
 	uint8_t rdcvcPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdcvcCmd[0] = 0x00;
 	rdcvcCmd[1] = 0x08;
 	rdcvcCmd_PEC = compute_PEC15(rdcvcCmd, 2);
 	append_PEC(rdcvcCmd, 2, rdcvcCmd_PEC);
 
-	read_cmd(rdcvcCmd, rdcvcPayload, side);
-	
-	rdcvcPayload_PECflag = verify_PEC15(rdcvcPayload);
-	
-	if(rdcvcPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->voltageRegisterC[i] = rdcvcPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdcvcCmd, rdcvcPayload, side);
+		
+		rdcvcPayload_PECflag = verify_PEC15(rdcvcPayload);
+		
+		if(rdcvcPayload_PECflag == 2 && rdcvcPayload[1] != 0xFF && rdcvcPayload[3] != 0xFF && rdcvcPayload[5] != 0xFF) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->voltageRegisterC[i] = rdcvcPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->voltageRegisterC[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
@@ -474,128 +512,163 @@ void RDCVC(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, cellVoltageRegisterGroupD_ptr, side);
 }*/
-void RDCVD(LTC6813 *reg_ptr, uint8_t side)
+void RDCVD(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdcvdCmd[4];
 	uint16_t rdcvdCmd_PEC;
 	uint8_t rdcvdPayload[8];
 	uint8_t rdcvdPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdcvdCmd[0] = 0x00;
 	rdcvdCmd[1] = 0x0A;
 	rdcvdCmd_PEC = compute_PEC15(rdcvdCmd, 2);
 	append_PEC(rdcvdCmd, 2, rdcvdCmd_PEC);
 
-	read_cmd(rdcvdCmd, rdcvdPayload, side);
-	
-	rdcvdPayload_PECflag = verify_PEC15(rdcvdPayload);
-	
-	if(rdcvdPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->voltageRegisterD[i] = rdcvdPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdcvdCmd, rdcvdPayload, side);
+		
+		rdcvdPayload_PECflag = verify_PEC15(rdcvdPayload);
+		
+		if(rdcvdPayload_PECflag == 2 && rdcvdPayload[1] != 0xFF && rdcvdPayload[3] != 0xFF && rdcvdPayload[5] != 0xFF) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->voltageRegisterD[i] = rdcvdPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->voltageRegisterD[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
-void RDAUXA(LTC6813 *reg_ptr, uint8_t side)
+void RDAUXA(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdauxaCmd[4];
 	uint16_t rdauxaCmd_PEC;
 	uint8_t rdauxaPayload[8];
 	uint8_t rdauxaPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdauxaCmd[0] = 0x00;
 	rdauxaCmd[1] = 0x0C;
 	rdauxaCmd_PEC = compute_PEC15(rdauxaCmd, 2);
 	append_PEC(rdauxaCmd, 2, rdauxaCmd_PEC);
 
-	read_cmd(rdauxaCmd, rdauxaPayload, side);
-	
-	rdauxaPayload_PECflag = verify_PEC15(rdauxaPayload);
-	
-	if(rdauxaPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->auxRegisterA[i] = rdauxaPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdauxaCmd, rdauxaPayload, side);
+		
+		rdauxaPayload_PECflag = verify_PEC15(rdauxaPayload);
+		
+		if(rdauxaPayload_PECflag == 2 && rdauxaPayload[1] != 0xFF && rdauxaPayload[3] != 0xFF && rdauxaPayload[5] != 0xFF) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->auxRegisterA[i] = rdauxaPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->auxRegisterA[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
-void RDAUXB(LTC6813 *reg_ptr, uint8_t side)
+void RDAUXB(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdauxbCmd[4];
 	uint16_t rdauxbCmd_PEC;
 	uint8_t rdauxbPayload[8];
 	uint8_t rdauxbPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdauxbCmd[0] = 0x00;
 	rdauxbCmd[1] = 0x0E;
 	rdauxbCmd_PEC = compute_PEC15(rdauxbCmd, 2);
 	append_PEC(rdauxbCmd, 2, rdauxbCmd_PEC);
 
-	read_cmd(rdauxbCmd, rdauxbPayload, side);
-	
-	rdauxbPayload_PECflag = verify_PEC15(rdauxbPayload);
-	
-	if(rdauxbPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->auxRegisterB[i] = rdauxbPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdauxbCmd, rdauxbPayload, side);
+		
+		rdauxbPayload_PECflag = verify_PEC15(rdauxbPayload);
+		
+		if(rdauxbPayload_PECflag == 2 && rdauxbPayload[1] != 0xFF && rdauxbPayload[3] != 0xFF) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->auxRegisterB[i] = rdauxbPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->auxRegisterB[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
-void RDAUXC(LTC6813 *reg_ptr, uint8_t side)
+void RDAUXC(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdauxcCmd[4];
 	uint16_t rdauxcCmd_PEC;
 	uint8_t rdauxcPayload[8];
 	uint8_t rdauxcPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdauxcCmd[0] = 0x00;
 	rdauxcCmd[1] = 0x0D;
 	rdauxcCmd_PEC = compute_PEC15(rdauxcCmd, 2);
 	append_PEC(rdauxcCmd, 2, rdauxcCmd_PEC);
 
-	read_cmd(rdauxcCmd, rdauxcPayload, side);
-	
-	rdauxcPayload_PECflag = verify_PEC15(rdauxcPayload);
-	
-	if(rdauxcPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->auxRegisterC[i] = rdauxcPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdauxcCmd, rdauxcPayload, side);
+		
+		rdauxcPayload_PECflag = verify_PEC15(rdauxcPayload);
+		
+		if(rdauxcPayload_PECflag == 2 && rdauxcPayload[1] != 0xFF && rdauxcPayload[3] != 0xFF && rdauxcPayload[5] != 0xFF) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->auxRegisterC[i] = rdauxcPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->auxRegisterC[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
-void RDAUXD(LTC6813 *reg_ptr, uint8_t side)
+void RDAUXD(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdauxdCmd[4];
 	uint16_t rdauxdCmd_PEC;
 	uint8_t rdauxdPayload[8];
 	uint8_t rdauxdPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdauxdCmd[0] = 0x00;
 	rdauxdCmd[1] = 0x0F;
 	rdauxdCmd_PEC = compute_PEC15(rdauxdCmd, 2);
 	append_PEC(rdauxdCmd, 2, rdauxdCmd_PEC);
 
-	read_cmd(rdauxdCmd, rdauxdPayload, side);
-	
-	rdauxdPayload_PECflag = verify_PEC15(rdauxdPayload);
-	
-	if(rdauxdPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->auxRegisterD[i] = rdauxdPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdauxdCmd, rdauxdPayload, side);
+		
+		rdauxdPayload_PECflag = verify_PEC15(rdauxdPayload);
+		
+		if(rdauxdPayload_PECflag == 2 && rdauxdPayload[1] != 0xFF) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->auxRegisterD[i] = rdauxdPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->auxRegisterD[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
@@ -611,28 +684,35 @@ void RDAUXD(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, statusRegisterGroupA_ptr, side);
 }*/
-void RDSTATA(LTC6813 *reg_ptr, uint8_t side)
+void RDSTATA(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdstataCmd[4];
 	uint16_t rdstataCmd_PEC;
 	uint8_t rdstataPayload[8];
 	uint8_t rdstataPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdstataCmd[0] = 0x00;
 	rdstataCmd[1] = 0x10;
 	rdstataCmd_PEC = compute_PEC15(rdstataCmd, 2);
 	append_PEC(rdstataCmd, 2, rdstataCmd_PEC);
 
-	read_cmd(rdstataCmd, rdstataPayload, side);
-	
-	rdstataPayload_PECflag = verify_PEC15(rdstataPayload);
-	
-	if(rdstataPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->statRegisterA[i] = rdstataPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdstataCmd, rdstataPayload, side);
+		
+		rdstataPayload_PECflag = verify_PEC15(rdstataPayload);
+		
+		if(rdstataPayload_PECflag == 2) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->statRegisterA[i] = rdstataPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->statRegisterA[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
@@ -648,28 +728,35 @@ void RDSTATA(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, statusRegisterGroupB_ptr, side);
 }*/
-void RDSTATB(LTC6813 *reg_ptr, uint8_t side)
+void RDSTATB(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdstatbCmd[4];
 	uint16_t rdstatbCmd_PEC;
 	uint8_t rdstatbPayload[8];
 	uint8_t rdstatbPayload_PECflag;
+	
+	uint8_t attempts = 0;
 
 	rdstatbCmd[0] = 0x00;
 	rdstatbCmd[1] = 0x12;
 	rdstatbCmd_PEC = compute_PEC15(rdstatbCmd, 2);
 	append_PEC(rdstatbCmd, 2, rdstatbCmd_PEC);
 
-	read_cmd(rdstatbCmd, rdstatbPayload, side);
-	
-	rdstatbPayload_PECflag = verify_PEC15(rdstatbPayload);
-	
-	if(rdstatbPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->statRegisterB[i] = rdstatbPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdstatbCmd, rdstatbPayload, side);
+		
+		rdstatbPayload_PECflag = verify_PEC15(rdstatbPayload);
+		
+		if(rdstatbPayload_PECflag == 2) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->statRegisterB[i] = rdstatbPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->statRegisterB[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 
 
@@ -685,7 +772,7 @@ void RDSTATB(LTC6813 *reg_ptr, uint8_t side)
 
 	read_cmd(cmd, PWMRegisterGroup_ptr, side);
 }*/
-void RDPWM(LTC6813 *reg_ptr, uint8_t side)
+void RDPWM(LTC6813 *asicRegisters, uint8_t side)
 {
 	uint8_t rdpwmCmd[4];
 	uint16_t rdpwmCmd_PEC;
@@ -697,16 +784,21 @@ void RDPWM(LTC6813 *reg_ptr, uint8_t side)
 	rdpwmCmd_PEC = compute_PEC15(rdpwmCmd, 2);
 	append_PEC(rdpwmCmd, 2, rdpwmCmd_PEC);
 
-	read_cmd(rdpwmCmd, rdpwmPayload, side);
-	
-	rdpwmPayload_PECflag = verify_PEC15(rdpwmPayload);
-	
-	if(rdpwmPayload_PECflag == 2) {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->pwmRegister[i] = rdpwmPayload[i]; }
+	while(attempts < 5) {
+		read_cmd(rdpwmCmd, rdpwmPayload, side);
+		
+		rdpwmPayload_PECflag = verify_PEC15(rdpwmPayload);
+		
+		if(rdpwmPayload_PECflag == 2) {
+			for(uint8_t i = 0; i < 6; i++) { asicRegisters->pwmRegister[i] = rdpwmPayload[i]; }
+			attempts = 10;
+		}
+		else {
+			attempts++;
+			HAL_Delay(1);
+		}
 	}
-	else {
-		for(uint8_t i = 0; i < 6; i++) { reg_ptr->pwmRegister[i] = 69; }
-	}
+	if(attempts != 10) { error(ERROR_PEC); }
 }
 // *** END READ COMMANDS ***
 

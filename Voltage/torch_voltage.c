@@ -1,77 +1,83 @@
 #include "main.h"
-#include "torch_lib.h"
-#include "torch_temp_sense.h"
 #include "torch_main.h"
-#include "torch_BMS_functions.h"
+#include "torch_STM32.h"
+#include "torch_LTC6813.h"
+#include "torch_voltage.h"
 
-void measure_inputs(LTC6813 *asicRegister, uint16_t *cellVoltages, float *moduleTemperatures, float *pcbTemperatures)
+
+void voltage_sense(void)
 {
-	voltage_sense(asicRegister, cellVoltages);
-}
-
-
-void voltage_sense(LTC6813 *asicRegister, uint16_t *cellVoltages)
-{
-	ADCV(SIDE_A);
-	HAL_Delay(1);
-	RDCVA(asicRegister, SIDE_A);
-	HAL_Delay(1);
-	RDCVB(asicRegister, SIDE_A);
-	HAL_Delay(1);
-	RDCVC(asicRegister, SIDE_A);
-	HAL_Delay(1);
-	RDCVD(asicRegister, SIDE_A);
-	HAL_Delay(1);
+	LTC6813 asicRegisters = {0};
 	
-	*cellVoltages = (asicRegister->voltageRegisterA[1] << 8) | asicRegister->voltageRegisterA[0];
-	*(cellVoltages + 1) = (asicRegister->voltageRegisterA[3] << 8) | asicRegister->voltageRegisterA[2];
-	*(cellVoltages + 2) = (asicRegister->voltageRegisterA[5] << 8) | asicRegister->voltageRegisterA[4];
-	*(cellVoltages + 3) = (asicRegister->voltageRegisterB[1] << 8) | asicRegister->voltageRegisterB[0];
-	*(cellVoltages + 4) = (asicRegister->voltageRegisterB[3] << 8) | asicRegister->voltageRegisterB[2];
-	*(cellVoltages + 5) = (asicRegister->voltageRegisterB[5] << 8) | asicRegister->voltageRegisterB[4];
-	*(cellVoltages + 6) = (asicRegister->voltageRegisterC[1] << 8) | asicRegister->voltageRegisterC[0];
-	*(cellVoltages + 7) = (asicRegister->voltageRegisterC[3] << 8) | asicRegister->voltageRegisterC[2];
-	*(cellVoltages + 8) = (asicRegister->voltageRegisterC[5] << 8) | asicRegister->voltageRegisterC[4];
-	*(cellVoltages + 9) = (asicRegister->voltageRegisterD[1] << 8) | asicRegister->voltageRegisterD[0];
+	ADCV(SIDE_A);
+	wait(2);		// consider waiting for 2 ms..
+	RDCVA(&asicRegisters, SIDE_A);
+	wait(1);
+	RDCVB(&asicRegisters, SIDE_A);
+	wait(1);
+	RDCVC(&asicRegisters, SIDE_A);
+	wait(1);
+	RDCVD(&asicRegisters, SIDE_A);
+	
+	/*
+	*cellVoltages = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
+	*(cellVoltages + 1) = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
+	*(cellVoltages + 2) = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
+	*(cellVoltages + 3) = (asicRegisters.voltageRegisterB[1] << 8) | asicRegisters.voltageRegisterB[0];
+	*(cellVoltages + 4) = (asicRegisters.voltageRegisterB[3] << 8) | asicRegisters.voltageRegisterB[2];
+	*(cellVoltages + 5) = (asicRegisters.voltageRegisterB[5] << 8) | asicRegisters.voltageRegisterB[4];
+	*(cellVoltages + 6) = (asicRegisters.voltageRegisterC[1] << 8) | asicRegisters.voltageRegisterC[0];
+	*(cellVoltages + 7) = (asicRegisters.voltageRegisterC[3] << 8) | asicRegisters.voltageRegisterC[2];
+	*(cellVoltages + 8) = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
+	*(cellVoltages + 9) = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
+	*/
+	bmsInputs.cellVoltages[0] = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
+	bmsInputs.cellVoltages[1] = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
+	bmsInputs.cellVoltages[2] = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
+	bmsInputs.cellVoltages[3] = (asicRegisters.voltageRegisterB[1] << 8) | asicRegisters.voltageRegisterB[0];
+	bmsInputs.cellVoltages[4] = (asicRegisters.voltageRegisterB[3] << 8) | asicRegisters.voltageRegisterB[2];
+	bmsInputs.cellVoltages[5] = (asicRegisters.voltageRegisterB[5] << 8) | asicRegisters.voltageRegisterB[4];
+	bmsInputs.cellVoltages[6] = (asicRegisters.voltageRegisterC[1] << 8) | asicRegisters.voltageRegisterC[0];
+	bmsInputs.cellVoltages[7] = (asicRegisters.voltageRegisterC[3] << 8) | asicRegisters.voltageRegisterC[2];
+	bmsInputs.cellVoltages[8] = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
+	bmsInputs.cellVoltages[9] = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
 	
 	ADCV(SIDE_B);
-	HAL_Delay(1);
-	RDCVA(asicRegister, SIDE_B);
-	HAL_Delay(1);
-	RDCVB(asicRegister, SIDE_B);
-	HAL_Delay(1);
-	RDCVC(asicRegister, SIDE_B);
-	HAL_Delay(1);
-	RDCVD(asicRegister, SIDE_B);
-	HAL_Delay(1);
+	wait(2);		// consider waiting for 2 ms..
+	RDCVA(&asicRegisters, SIDE_B);
+	wait(1);
+	RDCVB(&asicRegisters, SIDE_B);
+	wait(1);
+	RDCVC(&asicRegisters, SIDE_B);
+	wait(1);
+	RDCVD(&asicRegisters, SIDE_B);
+	wait(1);
 
-	*(cellVoltages + 10) = (asicRegister->voltageRegisterA[1] << 8) | asicRegister->voltageRegisterA[0];
-	*(cellVoltages + 11) = (asicRegister->voltageRegisterA[3] << 8) | asicRegister->voltageRegisterA[2];
-	*(cellVoltages + 12) = (asicRegister->voltageRegisterA[5] << 8) | asicRegister->voltageRegisterA[4];
-	*(cellVoltages + 13) = (asicRegister->voltageRegisterB[1] << 8) | asicRegister->voltageRegisterB[0];
-	*(cellVoltages + 14) = (asicRegister->voltageRegisterB[3] << 8) | asicRegister->voltageRegisterB[2];
-	*(cellVoltages + 15) = (asicRegister->voltageRegisterB[5] << 8) | asicRegister->voltageRegisterB[4];
-	*(cellVoltages + 16) = (asicRegister->voltageRegisterC[1] << 8) | asicRegister->voltageRegisterC[0];
-	*(cellVoltages + 17) = (asicRegister->voltageRegisterC[3] << 8) | asicRegister->voltageRegisterC[2];
-	*(cellVoltages + 18) = (asicRegister->voltageRegisterC[5] << 8) | asicRegister->voltageRegisterC[4];
-	*(cellVoltages + 19) = (asicRegister->voltageRegisterD[1] << 8) | asicRegister->voltageRegisterD[0];
+	/*
+	*(cellVoltages + 10) = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
+	*(cellVoltages + 11) = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
+	*(cellVoltages + 12) = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
+	*(cellVoltages + 13) = (asicRegisters.voltageRegisterB[1] << 8) | asicRegisters.voltageRegisterB[0];
+	*(cellVoltages + 14) = (asicRegisters.voltageRegisterB[3] << 8) | asicRegisters.voltageRegisterB[2];
+	*(cellVoltages + 15) = (asicRegisters.voltageRegisterB[5] << 8) | asicRegisters.voltageRegisterB[4];
+	*(cellVoltages + 16) = (asicRegisters.voltageRegisterC[1] << 8) | asicRegisters.voltageRegisterC[0];
+	*(cellVoltages + 17) = (asicRegisters.voltageRegisterC[3] << 8) | asicRegisters.voltageRegisterC[2];
+	*(cellVoltages + 18) = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
+	*(cellVoltages + 19) = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
+	*/
+	bmsInputs.cellVoltages[10] = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
+	bmsInputs.cellVoltages[11] = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
+	bmsInputs.cellVoltages[12] = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
+	bmsInputs.cellVoltages[13] = (asicRegisters.voltageRegisterB[1] << 8) | asicRegisters.voltageRegisterB[0];
+	bmsInputs.cellVoltages[14] = (asicRegisters.voltageRegisterB[3] << 8) | asicRegisters.voltageRegisterB[2];
+	bmsInputs.cellVoltages[15] = (asicRegisters.voltageRegisterB[5] << 8) | asicRegisters.voltageRegisterB[4];
+	bmsInputs.cellVoltages[16] = (asicRegisters.voltageRegisterC[1] << 8) | asicRegisters.voltageRegisterC[0];
+	bmsInputs.cellVoltages[17] = (asicRegisters.voltageRegisterC[3] << 8) | asicRegisters.voltageRegisterC[2];
+	bmsInputs.cellVoltages[18] = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
+	bmsInputs.cellVoltages[19] = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
 }
 
-
-void force_refup(void)
-{
-	uint8_t payloadRegisterA[8];
-
-	payloadRegisterA[0] = 0xFE;
-	for(uint8_t i = 1; i < 6; i++) {
-		payloadRegisterA[i] = 0x00;
-	}
-
-	WRCFGA(payloadRegisterA, SIDE_A);
-	WRCFGA(payloadRegisterA, SIDE_B);
-	// ADD REFUP VERIFICATION
-}
-
+// FOLLOWING CODE'S OBSOLETE PROTOTYPING CODE (not deleting it quite yet, as some parts are reusable)
 void balance_heat_test(void)
 {
 	Counter = 0;

@@ -703,7 +703,7 @@ void RDSTATA(LTC6813 *asicRegisters, uint8_t side)
 		
 		rdstataPayload_PECflag = verify_PEC15(rdstataPayload);
 		
-		if(rdstataPayload_PECflag == 2) {
+		if(rdstataPayload_PECflag == 2 && rdstataPayload[5] != 0xFF) {
 			for(uint8_t i = 0; i < 6; i++) { asicRegisters->statRegisterA[i] = rdstataPayload[i]; }
 			attempts = 10;
 		}
@@ -747,7 +747,7 @@ void RDSTATB(LTC6813 *asicRegisters, uint8_t side)
 		
 		rdstatbPayload_PECflag = verify_PEC15(rdstatbPayload);
 		
-		if(rdstatbPayload_PECflag == 2) {
+		if(rdstatbPayload_PECflag == 2 && rdstatbPayload[1] != 0xFF) {
 			for(uint8_t i = 0; i < 6; i++) { asicRegisters->statRegisterB[i] = rdstatbPayload[i]; }
 			attempts = 10;
 		}
@@ -977,3 +977,38 @@ void UNMUTE(uint8_t side)
 	action_cmd(unmuteCmd, side);
 }
 // *** END ACTION COMMANDS ***
+
+// HELPER FUNCTIONS
+uint8_t force_refup(void)
+{
+	LTC6813 asicRegisters = {0};
+	
+	asicRegisters.configRegisterA[0] = 0xFE;
+	
+	for(uint8_t i = 1; i < 6; i++) { asicRegisters.configRegisterA[i] = 0x00; }
+
+	WRCFGA(&asicRegisters, SIDE_A);
+	WRCFGA(&asicRegisters, SIDE_B);
+	wait(1);
+	
+	if(refup_check()) { return 1; }
+	
+	else { return 0; }
+}
+
+
+uint8_t refup_check(void)
+{
+	LTC6813 asicRegisters = {0};
+	uint8_t refonBit_sideA;
+	uint8_t refonBit_sideB;
+	
+	RDCFGA(&asicRegisters, SIDE_A);
+	refonBit_sideA = (asicRegisters.configRegisterA[0] >> 2) & 0x01;
+	RDCFGA(&asicRegisters, SIDE_B);
+	refonBit_sideB = (asicRegisters.configRegisterA[0] >> 2) & 0x01;
+	
+	if(refonBit_sideA == 1 && refonBit_sideB == 1) { return 1; }		// Both REFON bits are 1 (both LTCs are in the REFUP state)
+	
+	else { return 0; }													// One OR none of the REFON bits are 1
+}

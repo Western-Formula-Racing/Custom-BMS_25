@@ -3,8 +3,6 @@
 
 #define CMD_LEN 4
 #define PAYLOAD_LEN 8
-#define SIDE_A 1
-#define SIDE_B 0
 
 extern uint16_t PEC15_table[256];		// PEC look up table
 extern uint16_t CRC15_Poly;				// LTC6813 PEC polynomial
@@ -124,6 +122,12 @@ void MUTE(uint8_t side);
 
 void UNMUTE(uint8_t side);
 // *** END ACTION COMMANDS ***
+
+// HELPER FUNCTIONS
+uint8_t force_refup(void);		// Puts both LTC6813s into the REFUP state. Returns 1 if done successfully (0 otherwise)
+
+uint8_t refup_check(void);		// Checks if both LTC6813s are in the REFUP state. Returns 1 if they're in REFUP (0 otherwise)
+
 #endif
 
 

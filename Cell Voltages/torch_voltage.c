@@ -4,6 +4,13 @@
 #include "torch_LTC6813.h"
 #include "torch_voltage.h"
 
+void cell_voltage_check(void)
+{
+	voltage_sense();
+	voltage_delta();
+	delta_spread();
+}
+
 
 void voltage_sense(void)
 {
@@ -18,19 +25,7 @@ void voltage_sense(void)
 	RDCVC(&asicRegisters, SIDE_A);
 	wait(1);
 	RDCVD(&asicRegisters, SIDE_A);
-	
-	/*
-	*cellVoltages = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
-	*(cellVoltages + 1) = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
-	*(cellVoltages + 2) = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
-	*(cellVoltages + 3) = (asicRegisters.voltageRegisterB[1] << 8) | asicRegisters.voltageRegisterB[0];
-	*(cellVoltages + 4) = (asicRegisters.voltageRegisterB[3] << 8) | asicRegisters.voltageRegisterB[2];
-	*(cellVoltages + 5) = (asicRegisters.voltageRegisterB[5] << 8) | asicRegisters.voltageRegisterB[4];
-	*(cellVoltages + 6) = (asicRegisters.voltageRegisterC[1] << 8) | asicRegisters.voltageRegisterC[0];
-	*(cellVoltages + 7) = (asicRegisters.voltageRegisterC[3] << 8) | asicRegisters.voltageRegisterC[2];
-	*(cellVoltages + 8) = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
-	*(cellVoltages + 9) = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
-	*/
+
 	bmsInputs.cellVoltages[0] = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
 	bmsInputs.cellVoltages[1] = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
 	bmsInputs.cellVoltages[2] = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
@@ -53,18 +48,6 @@ void voltage_sense(void)
 	RDCVD(&asicRegisters, SIDE_B);
 	wait(1);
 
-	/*
-	*(cellVoltages + 10) = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
-	*(cellVoltages + 11) = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
-	*(cellVoltages + 12) = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
-	*(cellVoltages + 13) = (asicRegisters.voltageRegisterB[1] << 8) | asicRegisters.voltageRegisterB[0];
-	*(cellVoltages + 14) = (asicRegisters.voltageRegisterB[3] << 8) | asicRegisters.voltageRegisterB[2];
-	*(cellVoltages + 15) = (asicRegisters.voltageRegisterB[5] << 8) | asicRegisters.voltageRegisterB[4];
-	*(cellVoltages + 16) = (asicRegisters.voltageRegisterC[1] << 8) | asicRegisters.voltageRegisterC[0];
-	*(cellVoltages + 17) = (asicRegisters.voltageRegisterC[3] << 8) | asicRegisters.voltageRegisterC[2];
-	*(cellVoltages + 18) = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
-	*(cellVoltages + 19) = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
-	*/
 	bmsInputs.cellVoltages[10] = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
 	bmsInputs.cellVoltages[11] = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
 	bmsInputs.cellVoltages[12] = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
@@ -76,6 +59,37 @@ void voltage_sense(void)
 	bmsInputs.cellVoltages[18] = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
 	bmsInputs.cellVoltages[19] = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
 }
+
+
+void voltage_delta(void)
+{
+	for(uint8_t i = 0; i < 20; i++) {
+		bmsInputs.deltaCellVoltages[i] = (bmsInputs.cellVoltages[i] / 10000.0f) - (bmsInputs.oldCellVoltages[i] / 10000.0f);
+	}
+}
+
+
+void delta_spread(void)
+{
+	float deltaSpread;
+	float deltaMax = bmsInputs.deltaCellVoltages[0];
+	float deltaMin = bmsInputs.deltaCellVoltages[0];
+	
+	for(uint8_t i = 1; i < 20; i++) {
+		if(bmsInputs.deltaCellVoltages[i] > deltaMax) {
+			deltaMax = bmsInputs.deltaCellVoltages[i];
+		}
+		if(bmsInputs.deltaCellVoltages[i] < deltaMin) {
+			deltaMin = bmsInputs.deltaCellVoltages[i];
+		}
+	}
+	deltaSpread = deltaMax - deltaMin;
+	
+	if(deltaSpread > 15000) { 
+		// FAULT - cell voltages are not dropping equally
+	}
+}
+
 
 // FOLLOWING CODE'S OBSOLETE PROTOTYPING CODE (not deleting it quite yet, as some parts are reusable)
 void balance_heat_test(void)
@@ -136,6 +150,7 @@ void balance_heat_test(void)
 	__HAL_TIM_SET_COUNTER(&htim2, 0);
 	Counter = 0;
 }
+
 
 void balance_cells(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty)
 {

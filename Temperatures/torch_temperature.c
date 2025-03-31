@@ -1,14 +1,54 @@
 #include "main.h"
 #include "torch_main.h"
 #include "torch_temperature.h"
-#include "torch_LTC6813.h"
-#include "torch_STM32.h"
+#include "torch_ltc6813.h"
+#include "torch_stm32.h"
 #include <math.h>
 
-void read_thermistors(float *thermistorArray_ptr)		// FOR PROTOTYPE B. MUST BE UPDATED FOR FINAL BOARDS
+void temperature_check(uint8_t balancingFlag)
+{
+	float thermistorVoltage[18];
+	uint8_t highTempFlag = 0;
+	
+	read_thermistors(thermistorVoltage);
+	
+	thermistor_transfer_function(thermistorVoltage, 18, 0, 0);
+	
+	for(uint8_t i = 0; i < 18; i++) {
+		if(bmsInputs.moduleTemperatures[i] > bmsLimits.moduleMaxTemperature) {
+			highTempFlag = 1;
+		}
+	}
+	if(highTempFlag) {
+		thermalCount++;
+		if(thermalCount > THERMAL_COUNT_LIM) {
+			// overheat error
+		}
+	}
+	else {
+		if(thermalCount > 0) {
+			thermalCount--;
+		}
+	}
+	
+	if(balancingFlag) {
+		pcb_temperature_sense();
+		
+		for(uint8_t i = 0; i < 18; i++) {
+			if(bmsInputs.pcbTemperatures[i] > 50) {
+				pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
+			}
+			else if(bmsInputs.pcbTemperatures[i] > 90 && bmsInputs.pcbTemperatures[i] < 105) {
+				// wip
+			}
+		}
+	}
+}
+
+
+void read_thermistors(float *thermistorVoltage)
 {
 	uint16_t thermistorRawADC[18];
-	float thermistorVoltage[18];
 	uint16_t ADCSum;
 	
 	//HAL_ADC_Start(&hadc1);
@@ -238,18 +278,10 @@ void read_thermistors(float *thermistorArray_ptr)		// FOR PROTOTYPE B. MUST BE U
 	}
 	thermistorRawADC[15] = ADCSum / FILTER_LEN;
 	
-	// TEMPORARY 0 ASSIGNMENT TO LAST 2 THERMISTORS CAUSE I FORGOT TO ADD PULL UP RESISTORS
-	thermistorRawADC[16] = 0;
-	thermistorRawADC[17] = 0;
-	
 	// ADD MUX DISABLE ON FINAL BOARD
 	
 	for(uint8_t i = 0; i < 18; i++) {
-		thermistorVoltage[i] = (thermistorRawADC[i] / 4095.0) * 3.3;
-	}
-	
-	for(uint8_t i = 0; i < 18; i++) {
-		*(thermistorArray_ptr + i) = thermistorVoltage[i];
+		*(thermistorVoltage + i) = (thermistorRawADC[i] / 4095.0) * 3.3;
 	}
 }
 

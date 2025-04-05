@@ -31,7 +31,7 @@ uint8_t SPI_receive(SPI_HandleTypeDef *hspi,			// SPI peripheral (hspi1-3 for TO
 				    );
 
 uint8_t start_timer(TIM_HandleTypeDef *htim);			// Timer peripheral (htim2 for TORCH 2025)
-uint8_t stop_timer(TIM_HandleTypeDef *htim)				// Timer peripheral (htim2 for TORCH 2025)
+uint8_t stop_timer(TIM_HandleTypeDef *htim);				// Timer peripheral (htim2 for TORCH 2025)
 
 // TO ADD: ADC (DIFFERS FROM PROTOTYPE B) & CAN
 

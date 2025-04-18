@@ -1,110 +1,97 @@
 #include "main.h"
-#include "torch_lib.h"
-#include "torch_temp_sense.h"
 #include "torch_main.h"
-#include "torch_BMS_functions.h"
+#include "torch_STM32.h"
+#include "torch_LTC6813.h"
+#include "torch_voltage.h"
 
-void voltage_sense(uint16_t *cellVoltages)
+void cell_voltage_check(void)
 {
-	uint8_t sideA_cellVoltageA[8];
-	uint8_t sideA_cellVoltageB[8];
-	uint8_t sideA_cellVoltageC[8];
-	uint8_t sideA_cellVoltageD[8];
+	voltage_sense();
+	voltage_delta();
+	delta_spread();
+}
 
-	uint8_t sideB_cellVoltageA[8];
-	uint8_t sideB_cellVoltageB[8];
-	uint8_t sideB_cellVoltageC[8];
-	uint8_t sideB_cellVoltageD[8];
 
-	uint8_t sideA_cellVoltageA_PECflag;
-	uint8_t sideA_cellVoltageB_PECflag;
-	uint8_t sideA_cellVoltageC_PECflag;
-	uint8_t sideA_cellVoltageD_PECflag;
-
-	uint8_t sideB_cellVoltageA_PECflag;
-	uint8_t sideB_cellVoltageB_PECflag;
-	uint8_t sideB_cellVoltageC_PECflag;
-	uint8_t sideB_cellVoltageD_PECflag;
-
+void voltage_sense(void)
+{
+	LTC6813 asicRegisters = {0};
+	
 	ADCV(SIDE_A);
+	wait(2);		// consider waiting for 2 ms..
+	RDCVA(&asicRegisters, SIDE_A);
+	wait(1);
+	RDCVB(&asicRegisters, SIDE_A);
+	wait(1);
+	RDCVC(&asicRegisters, SIDE_A);
+	wait(1);
+	RDCVD(&asicRegisters, SIDE_A);
+
+	bmsInputs.cellVoltages[0] = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
+	bmsInputs.cellVoltages[1] = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
+	bmsInputs.cellVoltages[2] = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
+	bmsInputs.cellVoltages[3] = (asicRegisters.voltageRegisterB[1] << 8) | asicRegisters.voltageRegisterB[0];
+	bmsInputs.cellVoltages[4] = (asicRegisters.voltageRegisterB[3] << 8) | asicRegisters.voltageRegisterB[2];
+	bmsInputs.cellVoltages[5] = (asicRegisters.voltageRegisterB[5] << 8) | asicRegisters.voltageRegisterB[4];
+	bmsInputs.cellVoltages[6] = (asicRegisters.voltageRegisterC[1] << 8) | asicRegisters.voltageRegisterC[0];
+	bmsInputs.cellVoltages[7] = (asicRegisters.voltageRegisterC[3] << 8) | asicRegisters.voltageRegisterC[2];
+	bmsInputs.cellVoltages[8] = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
+	bmsInputs.cellVoltages[9] = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
+	
 	ADCV(SIDE_B);
-	HAL_Delay(1);
+	wait(2);		// consider waiting for 2 ms..
+	RDCVA(&asicRegisters, SIDE_B);
+	wait(1);
+	RDCVB(&asicRegisters, SIDE_B);
+	wait(1);
+	RDCVC(&asicRegisters, SIDE_B);
+	wait(1);
+	RDCVD(&asicRegisters, SIDE_B);
+	wait(1);
 
-	RDCVA(sideA_cellVoltageA, SIDE_A);
-	RDCVA(sideB_cellVoltageA, SIDE_B);
-	HAL_Delay(1);
-	RDCVB(sideA_cellVoltageB, SIDE_A);
-	RDCVB(sideB_cellVoltageB, SIDE_B);
-	HAL_Delay(1);
-	RDCVC(sideA_cellVoltageC, SIDE_A);
-	RDCVC(sideB_cellVoltageC, SIDE_B);
-	HAL_Delay(1);
-	RDCVD(sideA_cellVoltageD, SIDE_A);
-	RDCVD(sideB_cellVoltageD, SIDE_B);
+	bmsInputs.cellVoltages[10] = (asicRegisters.voltageRegisterA[1] << 8) | asicRegisters.voltageRegisterA[0];
+	bmsInputs.cellVoltages[11] = (asicRegisters.voltageRegisterA[3] << 8) | asicRegisters.voltageRegisterA[2];
+	bmsInputs.cellVoltages[12] = (asicRegisters.voltageRegisterA[5] << 8) | asicRegisters.voltageRegisterA[4];
+	bmsInputs.cellVoltages[13] = (asicRegisters.voltageRegisterB[1] << 8) | asicRegisters.voltageRegisterB[0];
+	bmsInputs.cellVoltages[14] = (asicRegisters.voltageRegisterB[3] << 8) | asicRegisters.voltageRegisterB[2];
+	bmsInputs.cellVoltages[15] = (asicRegisters.voltageRegisterB[5] << 8) | asicRegisters.voltageRegisterB[4];
+	bmsInputs.cellVoltages[16] = (asicRegisters.voltageRegisterC[1] << 8) | asicRegisters.voltageRegisterC[0];
+	bmsInputs.cellVoltages[17] = (asicRegisters.voltageRegisterC[3] << 8) | asicRegisters.voltageRegisterC[2];
+	bmsInputs.cellVoltages[18] = (asicRegisters.voltageRegisterC[5] << 8) | asicRegisters.voltageRegisterC[4];
+	bmsInputs.cellVoltages[19] = (asicRegisters.voltageRegisterD[1] << 8) | asicRegisters.voltageRegisterD[0];
+}
 
-	sideA_cellVoltageA_PECflag = verify_PEC15(sideA_cellVoltageA);
-	sideA_cellVoltageB_PECflag = verify_PEC15(sideA_cellVoltageB);
-	sideA_cellVoltageC_PECflag = verify_PEC15(sideA_cellVoltageC);
-	sideA_cellVoltageD_PECflag = verify_PEC15(sideA_cellVoltageD);
 
-	sideB_cellVoltageA_PECflag = verify_PEC15(sideB_cellVoltageA);
-	sideB_cellVoltageB_PECflag = verify_PEC15(sideB_cellVoltageB);
-	sideB_cellVoltageC_PECflag = verify_PEC15(sideB_cellVoltageC);
-	sideB_cellVoltageD_PECflag = verify_PEC15(sideB_cellVoltageD);
+void voltage_delta(void)
+{
+	for(uint8_t i = 0; i < 20; i++) {
+		bmsInputs.deltaCellVoltages[i] = (bmsInputs.cellVoltages[i] / 10000.0f) - (bmsInputs.oldCellVoltages[i] / 10000.0f);
+	}
+}
 
-	// If CRC fails, all cell voltages are set to 69 (nice)
-	if(sideA_cellVoltageA_PECflag != 2 ||
-	   sideA_cellVoltageB_PECflag != 2 ||
-	   sideA_cellVoltageC_PECflag != 2 ||
-	   sideA_cellVoltageD_PECflag != 2 ||
-	   sideB_cellVoltageA_PECflag != 2 ||
-	   sideB_cellVoltageB_PECflag != 2 ||
-	   sideB_cellVoltageC_PECflag != 2 ||
-	   sideB_cellVoltageD_PECflag != 2)
-	{
-		for(uint8_t i = 0; i < CELL_QTY; i++) {
-			*(cellVoltages + i) = 69;
+
+void delta_spread(void)
+{
+	float deltaSpread;
+	float deltaMax = bmsInputs.deltaCellVoltages[0];
+	float deltaMin = bmsInputs.deltaCellVoltages[0];
+	
+	for(uint8_t i = 1; i < 20; i++) {
+		if(bmsInputs.deltaCellVoltages[i] > deltaMax) {
+			deltaMax = bmsInputs.deltaCellVoltages[i];
+		}
+		if(bmsInputs.deltaCellVoltages[i] < deltaMin) {
+			deltaMin = bmsInputs.deltaCellVoltages[i];
 		}
 	}
-	else {
-		*cellVoltages = (sideA_cellVoltageA[1] << 8) | sideA_cellVoltageA[0];
-		*(cellVoltages + 1) = (sideA_cellVoltageA[3] << 8) | sideA_cellVoltageA[2];
-		*(cellVoltages + 2) = (sideA_cellVoltageA[5] << 8) | sideA_cellVoltageA[4];
-		*(cellVoltages + 3) = (sideA_cellVoltageB[1] << 8) | sideA_cellVoltageB[0];
-		*(cellVoltages + 4) = (sideA_cellVoltageB[3] << 8) | sideA_cellVoltageB[2];
-		*(cellVoltages + 5) = (sideA_cellVoltageB[5] << 8) | sideA_cellVoltageB[4];
-		*(cellVoltages + 6) = (sideA_cellVoltageC[1] << 8) | sideA_cellVoltageC[0];
-		*(cellVoltages + 7) = (sideA_cellVoltageC[3] << 8) | sideA_cellVoltageC[2];
-		*(cellVoltages + 8) = (sideA_cellVoltageC[5] << 8) | sideA_cellVoltageC[4];
-		*(cellVoltages + 9) = (sideA_cellVoltageD[1] << 8) | sideA_cellVoltageD[0];
-
-		*(cellVoltages + 10) = (sideB_cellVoltageA[1] << 8) | sideB_cellVoltageA[0];
-		*(cellVoltages + 11) = (sideB_cellVoltageA[3] << 8) | sideB_cellVoltageA[2];
-		*(cellVoltages + 12) = (sideB_cellVoltageA[5] << 8) | sideB_cellVoltageA[4];
-		*(cellVoltages + 13) = (sideB_cellVoltageB[1] << 8) | sideB_cellVoltageB[0];
-		*(cellVoltages + 14) = (sideB_cellVoltageB[3] << 8) | sideB_cellVoltageB[2];
-		*(cellVoltages + 15) = (sideB_cellVoltageB[5] << 8) | sideB_cellVoltageB[4];
-		*(cellVoltages + 16) = (sideB_cellVoltageC[1] << 8) | sideB_cellVoltageC[0];
-		*(cellVoltages + 17) = (sideB_cellVoltageC[3] << 8) | sideB_cellVoltageC[2];
-		*(cellVoltages + 18) = (sideB_cellVoltageC[5] << 8) | sideB_cellVoltageC[4];
-		*(cellVoltages + 19) = (sideB_cellVoltageD[1] << 8) | sideB_cellVoltageD[0];
+	deltaSpread = deltaMax - deltaMin;
+	
+	if(deltaSpread > 15000) { 
+		// FAULT - cell voltages are not dropping equally
 	}
 }
 
-void force_refup(void)
-{
-	uint8_t payloadRegisterA[8];
 
-	payloadRegisterA[0] = 0xFE;
-	for(uint8_t i = 1; i < 6; i++) {
-		payloadRegisterA[i] = 0x00;
-	}
-
-	WRCFGA(payloadRegisterA, SIDE_A);
-	WRCFGA(payloadRegisterA, SIDE_B);
-	// ADD REFUP VERIFICATION
-}
-
+// FOLLOWING CODE'S OBSOLETE PROTOTYPING CODE (not deleting it quite yet, as some parts are reusable)
 void balance_heat_test(void)
 {
 	Counter = 0;
@@ -163,6 +150,7 @@ void balance_heat_test(void)
 	__HAL_TIM_SET_COUNTER(&htim2, 0);
 	Counter = 0;
 }
+
 
 void balance_cells(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty)
 {

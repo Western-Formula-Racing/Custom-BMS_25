@@ -1,41 +1,21 @@
 #include "main.h"
-#include "torch_lib.h"
-#include "torch_temp_sense.h"
+#include "torch_main.h"
 #include "torch_stm32.h"
-#include "torch_LTC6813_comms.h"
+#include "torch_voltage.h"
+#include "torch_temperature.h"
+#include "torch_ltc6813.h"
+#include "torch_states.h"
 
-volatile uint32_t Counter = 0;
-uint8_t BMS_state = 0;
+uint8_t torchState = 0;
 
-torch_main2(void)
+
+void torch_main(void)
 {
-	// EMPTY buffer loop
-	//Counter = 0;
-	HAL_TIM_Base_Start_IT(&htim2);
-	while (Counter <= 2000) {
-		HAL_Delay(1);
-	}
-	HAL_TIM_Base_Stop_IT(&htim2);
-	__HAL_TIM_SET_COUNTER(&htim2, 0);
-	Counter = 0;
-	
-	uint16_t cellVoltages[CELL_QTY];
-	uint16_t cellVoltagesPrior[CELL_QTY] = {0};
-	uint16_t cellVoltageRateOfChange[CELL_QTY] = {0};
-	uint16_t cellVoltageRateOfChangeLim = 500;		// 500 equates to 50 mV
-	uint16_t cellVoltageSag[CELL_QTY];
-	uint16_t cellOCV[CELL_QTY];
-	float cellResistances[CELL_QTY];
-	float temperatures[THERM_QTY];
-	
-	uint16_t cellUndervoltage = 26000;
-	uint16_t cellOvervoltage = 41500;
 	uint8_t undervoltCheckLim = 10;
 	uint8_t overvoltCheckLim = 10;
 	uint8_t undervoltCheck = 0;
 	uint8_t overvoltCheck = 0;
 	
-	uint8_t temperatureLimit = 60;
 	uint8_t overheatCheckLim = 10;
 	uint8_t overheatCheck = 0;
 	
@@ -43,19 +23,31 @@ torch_main2(void)
 	uint8_t chargeCurrentCheckLim = 3;
 	uint8_t chargeCurrentCheck = 0;
 	
-	BMS_state = 5;	// (DEL) forcing states for dev purposes
-
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);		// !SS on side A LTC6820 goes high
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);	// !SS on side B LTC6820 goes high
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);		// EN on side A LTC6820 goes high
-	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_2, GPIO_PIN_SET);		// EN on side B LTC6820 goes high
-	setup_PEC15();		// Creates CRC lookup table
-	//force_refup();		// Puts both LTC6813s in the REFUP state (DISABLED (rip '24 module))
-	HAL_Delay(1);
-
-	// diagnostic function
+	torchState = 5;	// (DEL) forcing states for dev purposes
 	
-	while (1) {
+	// 2 SECOND BUFFER
+	start_timer(&htim2);
+	while(Counter <= 2000) { wait(1); }
+	stop_timer(&htim2);
+	
+	led_diagnostics();
+	
+	setup_PEC15();		// Creates CRC lookup table
+	
+	led_active();
+	torchState = 1;
+	
+	while(1) {
+		temperature_check();
+		
+		cell_voltage_check();
+		
+		can_buffer_check();
+		
+		if(canBufferCheck == 1) {
+			// 
+		}
+		
 		// !! DEV state !!
 		while(BMS_state == 5) {
 

@@ -352,7 +352,9 @@ class BMSSimulatorGUI:
         cell: e.g., "V1", "T1", "C1", "R1", etc.
         reading: numeric value
         """
-        mod_str, cell_str, reading = msg
+        # Only load the first three variables in the tuple
+        # The 4th item is a dt object of when the message was recorded
+        mod_str, cell_str, reading, *_ = msg
         # For non-resistor cells, module index is int(mod_str[1:]) - 1.
         if cell_str.startswith("V"):
             module_index = int(mod_str[1:]) - 1

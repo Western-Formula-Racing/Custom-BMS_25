@@ -3,6 +3,7 @@ import os
 import cantools
 import datetime
 import random, time
+from canlib import canlib, Frame
 
 # Convert raw CAN signal names to GUI cell tags
 lookup = {
@@ -77,7 +78,7 @@ def simulate_can_messages(can_queue, modules, voltage_cells, temp_cells, current
 
 def run_can_listener(can_queue, simulate=True):
     """
-    Starts either a simulation loop or real CAN decoding.
+    Starts either a simulation loop or real CAN decoding using Kvaser CANlib SDK.
     """
     voltage_cells = [f"V{i}" for i in range(1, 21)]
     temp_cells = [f"T{i}" for i in range(1, 19)]
@@ -88,25 +89,36 @@ def run_can_listener(can_queue, simulate=True):
     if simulate:
         simulate_can_messages(can_queue, modules, voltage_cells, temp_cells, current_cells, resistor_cells)
     else:
-        bus = can.interface.Bus(channel='can0', bustype='kvaser')
-        while True:
-            msg = bus.recv()
-            if msg is None:
-                continue
-            try:
-                message_def = db.get_message_by_frame_id(msg.arbitration_id)
-            except KeyError:
-                continue
-            if "TORCH" not in message_def.name or "STAT" in message_def.name:
-                continue
-            decoded = message_def.decode(msg.data)
-            for signal_name, value in decoded.items():
-                parts = signal_name.split('_')
-                module = parts[0]
-                cell_raw = '_'.join(parts[1:])
-                cell_tag = lookup.get(cell_raw)
-                timestamp = datetime.datetime.now()
-                can_queue.put((module, cell_tag, value, timestamp))
+        ch = canlib.openChannel(channel=0, flags=canlib.Open.EXCLUSIVE)
+        ch.setBusParams(canlib.canBITRATE_500K)
+        ch.busOn()
+        try:
+            while True:
+                try:
+                    msg = ch.read(timeout=500)
+                except canlib.canNoMsg:
+                    continue
+                except canlib.canError as e:
+                    print(f"CANlib Error: {e}")
+                    continue
+
+                try:
+                    message_def = db.get_message_by_frame_id(msg.id)
+                except KeyError:
+                    continue
+                if "TORCH" not in message_def.name or "STAT" in message_def.name:
+                    continue
+                decoded = message_def.decode(bytes(msg.data))
+                for signal_name, value in decoded.items():
+                    parts = signal_name.split('_')
+                    module = parts[0]
+                    cell_raw = '_'.join(parts[1:])
+                    cell_tag = lookup.get(cell_raw)
+                    timestamp = datetime.datetime.now()
+                    can_queue.put((module, cell_tag, value, timestamp))
+        finally:
+            ch.busOff()
+            ch.close()
 
 if __name__ == '__main__':
     # For standalone testing

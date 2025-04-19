@@ -2,7 +2,6 @@ import can
 import os
 import cantools
 import datetime
-import multiprocessing
 import random, time
 
 # Convert raw CAN signal names to GUI cell tags
@@ -76,40 +75,10 @@ def simulate_can_messages(can_queue, modules, voltage_cells, temp_cells, current
         can_queue.put((mod, cell, reading))
         time.sleep(0.01)
 
-def decoder_loop(shared_buffer):
-    bus = can.interface.Bus(channel='can0', bustype='kvaser')
-    while True:
-        msg = bus.recv()
-        if msg is None:
-            continue
-        try:
-            message_def = db.get_message_by_frame_id(msg.arbitration_id)
-        except KeyError:
-            continue
-        if "TORCH" not in message_def.name or "STAT" in message_def.name:
-            continue
-        decoded = message_def.decode(msg.data)
-        for signal_name, value in decoded.items():
-            parts = signal_name.split('_')
-            module = parts[0]
-            cell_raw = '_'.join(parts[1:])
-            cell_tag = lookup.get(cell_raw)
-            timestamp = datetime.datetime.now()
-            shared_buffer.append((module, cell_tag, value, timestamp))
-
-def sender_loop(shared_buffer, can_queue):
-    while True:
-        if shared_buffer:
-            can_queue.put(shared_buffer[-1])
-        time.sleep(0.001)
-
 def run_can_listener(can_queue, simulate=True):
     """
-    Starts either a simulation loop or real CAN decoding processes.
+    Starts either a simulation loop or real CAN decoding.
     """
-    manager = multiprocessing.Manager()
-    shared_buffer = manager.list()
-
     voltage_cells = [f"V{i}" for i in range(1, 21)]
     temp_cells = [f"T{i}" for i in range(1, 19)]
     current_cells = [f"C{i}" for i in range(1, 21)]
@@ -119,15 +88,25 @@ def run_can_listener(can_queue, simulate=True):
     if simulate:
         simulate_can_messages(can_queue, modules, voltage_cells, temp_cells, current_cells, resistor_cells)
     else:
-        p_decode = multiprocessing.Process(target=decoder_loop, args=(shared_buffer,))
-        p_send = multiprocessing.Process(target=sender_loop, args=(shared_buffer, can_queue))
-        p_decode.daemon = True
-        p_send.daemon = True
-        p_decode.start()
-        p_send.start()
-        p_decode.join()
-        p_send.join()
-
+        bus = can.interface.Bus(channel='can0', bustype='kvaser')
+        while True:
+            msg = bus.recv()
+            if msg is None:
+                continue
+            try:
+                message_def = db.get_message_by_frame_id(msg.arbitration_id)
+            except KeyError:
+                continue
+            if "TORCH" not in message_def.name or "STAT" in message_def.name:
+                continue
+            decoded = message_def.decode(msg.data)
+            for signal_name, value in decoded.items():
+                parts = signal_name.split('_')
+                module = parts[0]
+                cell_raw = '_'.join(parts[1:])
+                cell_tag = lookup.get(cell_raw)
+                timestamp = datetime.datetime.now()
+                can_queue.put((module, cell_tag, value, timestamp))
 
 if __name__ == '__main__':
     # For standalone testing

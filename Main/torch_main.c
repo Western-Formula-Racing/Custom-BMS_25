@@ -1,273 +1,392 @@
 #include "main.h"
 #include "torch_main.h"
 #include "torch_stm32.h"
-#include "torch_voltage.h"
-#include "torch_temperature.h"
 #include "torch_ltc6813.h"
-#include "torch_states.h"
+#include "torch_can.h"
+#include "torch_balance.h"
 
-uint8_t torchState = 0;
+
+const uint8_t moduleID = 2;
+volatile uint32_t transmitCounter;
+volatile uint32_t measureCounter;
+//volatile uint32_t canTimeoutCounter;
+
+uint8_t mode;
+uint8_t state;
 
 
 void torch_main(void)
 {
-	uint8_t undervoltCheckLim = 10;
-	uint8_t overvoltCheckLim = 10;
-	uint8_t undervoltCheck = 0;
-	uint8_t overvoltCheck = 0;
-	
-	uint8_t overheatCheckLim = 10;
-	uint8_t overheatCheck = 0;
-	
+	mode = 3;
+
+	CAN_RxHeaderTypeDef RxHeader;
+	uint8_t RxData[8];
+
+	uint16_t cellVoltages[CELL_QTY];		// Holds all cell voltages within a module
+	float temperatures[THERM_QTY];			// Holds all module thermistor temperatures
+
 	uint16_t packCurrent;
-	uint8_t chargeCurrentCheckLim = 3;
-	uint8_t chargeCurrentCheck = 0;
-	
-	torchState = 5;	// (DEL) forcing states for dev purposes
-	
+	uint16_t globalMinCellVoltage = 0;			// Holds the minimum cell voltage in the entire pack
+
+	uint8_t overheats = 0;
+	uint8_t overheatFlag = 0;
+
+	uint8_t overvolts = 0;
+	uint8_t overvoltFlag = 0;
+
+	uint8_t undervolts = 0;
+	uint8_t undervoltFlag = 0;
+
+	uint8_t faultingThermistorIndex;
+	float faultingTemperature;
+	uint8_t faultingCellIndex;
+	uint16_t faultingCellVoltage;
+
+
+	pull_low(GPIOA, GPIO_PIN_4);		// LTC6820 side A !SS
+	pull_low(GPIOA, GPIO_PIN_15);		// LTC6820 side B !SS
+	pull_high(GPIOC, GPIO_PIN_4);		// LTC6820 side A force EN
+	pull_high(GPIOD, GPIO_PIN_2);		// LTC6820 side B force EN
+
 	// 2 SECOND BUFFER
 	start_timer(&htim2);
-	while(Counter <= 2000) { wait(1); }
+	while (Counter <= 2000) {
+		wait(1);
+	}
 	stop_timer(&htim2);
-	
-	led_diagnostics();
-	
-	setup_PEC15();		// Creates CRC lookup table
-	
-	led_active();
-	torchState = 1;
-	
-	while(1) {
-		temperature_check();
-		
-		cell_voltage_check();
-		
-		can_buffer_check();
-		
-		if(canBufferCheck == 1) {
-			// 
-		}
-		
-		// !! DEV state !!
-		while(BMS_state == 5) {
 
-			// CODE BELOW TESTS READING BACK A REGISTER (ERROR HANDLING)
-			// The read-back registers have an identical format to how we transmit data to the LTC
-				// i.e. for RDCFGA, index [0] refers to CFGAR0, index [1] refers to CFGAR1, etc.
-			/*uint8_t sideA_payload[8];
-			uint8_t sideB_payload[8];
+	setup_PEC15();
 
-			uint8_t sideA_registerGroupA[8];
-			uint8_t sideB_registerGroupA[8];
-			uint8_t sideA_PECflag;
-			uint8_t sideB_PECflag;
+	// !! MODE = 3 IS STANDALONE ACTIVE !!
+	if(mode == 3) {
+		transmitCounter = 0;
+		measureCounter = 0;
+		state = ACTIVE;						// Change this to CHARGE if you wanna force it to start CHARGE
+		pull_high(GPIOA, GPIO_PIN_8);		// TURN ON ACTIVE LED
+		HAL_CAN_Start(&hcan1);
+		start_timer(&htim2);
+		force_refup();
+	}
+	while(mode == 3) {
+		while(state == ACTIVE) {
 
-			uint8_t sideA_registerGroupB[8];
-			uint8_t sideB_registerGroupB[8];
-			uint8_t sideA_PECflag2;
-			uint8_t sideB_PECflag2;
-
-			sideA_payload[0] = 0xFE;
-			sideA_payload[1] = 0x00;
-			sideA_payload[2] = 0xAB;
-			sideA_payload[3] = 0xCD;
-			sideA_payload[4] = 0x00;
-			sideA_payload[5] = 0x00;
-
-			sideB_payload[0] = 0xFB;
-			sideB_payload[1] = 0xAA;
-			sideB_payload[2] = 0xAA;
-			sideB_payload[3] = 0xAA;
-			sideB_payload[4] = 0x00;
-			sideB_payload[5] = 0x00;
-
-			WRCFGA(sideA_payload, SIDE_A);
-			WRCFGA(sideB_payload, SIDE_B);
-			HAL_Delay(1);
-
-			RDCFGA(sideA_registerGroupA, SIDE_A);
-			RDCFGA(sideB_registerGroupA, SIDE_B);
-			HAL_Delay(1);
-
-			RDCFGB(sideA_registerGroupB, SIDE_A);
-			RDCFGB(sideB_registerGroupB, SIDE_B);
-
-			sideA_PECflag = verify_PEC15(sideA_registerGroupA);
-			sideB_PECflag = verify_PEC15(sideB_registerGroupA);
-			sideA_PECflag2 = verify_PEC15(sideA_registerGroupB);
-			sideB_PECflag2 = verify_PEC15(sideB_registerGroupB);*/
-
-			while (1) {
-				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
-				HAL_Delay(1000);
-				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);
-				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
-				HAL_Delay(1000);
-			}
-
-		}
-		// !! ACTIVE state !!
-		while(BMS_state == 1) {
-			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);		// Turns on ACTIVE LED
-			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);	// Turns off STANDBY LED (changed to DEBUG on final)
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);	// Turns off CHARGE LED
-			
-			temperature_sense(temperatures);
-			
-			for(uint8_t i = 0; i < 16; i++) {			// Make this THERM_QTY later
-				if(temperatures[i] >= temperatureLimit) {
-					overheatCheck += 2;
-					
-					if(overheatCheck > overheatCheckLim) {
-						// send error code CAN with temperature flagged
-					}
+			if(measureCounter > 100) {
+				if(!refup_check()) {
+					force_refup();
+					wait(1);
 				}
-			}
-						
-			// get pack current from CAN message
-			if(packCurrent < 0) {	// if it's (-)
-				chargeCurrentCheck += 1;
-			
-				if(chargeCurrentCheck > chargeCurrentCheckLim) { BMS_state = 2; }
-			}
-			
-			//approx_cell_resistance(cellResistances, temperatures);		// function that solves R(T) for cells
-			
-			//approx_voltage_sag(cellVoltageSag, cellResistances, packCurrent);	// function that'll solve voltage sag
-			
-			voltage_sense(cellVoltages);
-			for(uint8_t i = 0; i < CELL_QTY; i++) {
-				if(cellVoltages[i] == 69) {
-					// run failed cell voltage measurement due to PEC diagnostic function
-				}
-				cellVoltageRateOfChange[i] = cellVoltages[i] - cellVoltagesPrior[i];
-			}
-			
-			for(uint8_t i = 0; i < CELL_QTY; i++) { cellOCV[i] = cellVoltages[i] + cellVoltageSag[i]; }
-			
-			for(uint8_t i = 0; i < CELL_QTY; i++) {
-				if(cellOCV[i] <= cellUndervoltage) {
-					undervoltCheck += 2;
-					
-					if(undervoltCheck > undervoltCheckLim) {
-						// send error CAN code with undervolt cell flagged
-					}
-				}
-				else if(cellOCV[i] >= cellOvervoltage) {	// This should never occur.. cell voltage should only increase during charging, when BMS is in CHARGE
-					overvoltCheck += 2;
-					
-					if(overvoltCheck > overheatCheckLim) {
-						// send error CAN code with overvolt cell flagged
-					}
-				}
-			}
 
-
-			//balance_heat_test();
-
-			while (1) {
-				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
-				HAL_Delay(1000);
-				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);
-				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
-				HAL_Delay(1000);
-			}
-		}
-		// !! CHARGE state !!
-		while(BMS_state == 2) {
-			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);		// Turns off ACTIVE LED
-			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);	// Turns off STANDBY LED (changed to DEBUG on final)
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);	// Turns on CHARGE LED
-
-			uint8_t temperatures[THERM_QTY];
-			uint16_t cellVoltages[CELL_QTY];
-			uint8_t chargingFlag = 1;	// 1 means pack is charging; 0 means charging's done and BMS is balancing
-
-			while(chargingFlag == 1) {
-				// This loop runs while the pack is charging. It assumes that VCELL will keep increasing
-				// Charging stops (chargingFlag = 2) when a VCELL reaches 4.1 V
-
-				// temp sense
-				// add for-loop the checks temps
+				temperature_sense(temperatures);
 				voltage_sense(cellVoltages);
 
-				for(uint8_t i = 0; i < CELL_QTY; i++) {
-					if(cellVoltages[i] >= 41000) {
-						// Transmit CAN message that charging is DONE
-							// could be no different than standard DAQ message (cause DAQ has all cell voltages)
-						chargingFlag = 2;
+				for(uint8_t i = 0; i < THERM_QTY; i++) {
+					if(temperatures[i] > MAX_TEMPERATURE) {
+						overheatFlag = 1;
+						faultingThermistorIndex = i + 1;
+						faultingTemperature = temperatures[i];
 					}
 				}
-				HAL_Delay(1);
-				chargingFlag = 2; // DEL THIS
-			}
-			uint16_t minCellVoltage = cellVoltages[0];
-			uint8_t minCellVoltageIndex = 0;
-			uint8_t cellsToBalance[CELL_QTY];
-			uint8_t cellsToBalanceQty = 0;
+				if(overheatFlag) { overheats++; }
 
-			// For loop below finds the minimum cell voltage & its index
-			for(uint8_t i = 1; i < CELL_QTY; i++) {
-				if(cellVoltages[i] < minCellVoltage) {
-					minCellVoltage = cellVoltages[i];
-					minCellVoltageIndex = i;
+				else {
+					if(overheats > 0) { overheats--; }
 				}
-			}
+				// MODULE OVERHEAT FAULT
+				if(overheats > ATTEMPT_LIMIT) {
+					float tempScale = 1000.0f;
+					uint16_t intFaultingTemperature = (uint16_t)(faultingTemperature * tempScale);
 
-			// For loop below finds all cells that have a delta equal to or greater than 10 mV
-			for(uint8_t i = 0; i < CELL_QTY; i++) {
-				if(cellVoltages[i] >= minCellVoltage + 100) {
-					cellsToBalance[cellsToBalanceQty] = i + 1;
-					cellsToBalanceQty++;
+					error_loop(ERROR_OVERHEAT, intFaultingTemperature, faultingThermistorIndex);
 				}
-			}
-			if(cellsToBalanceQty > 0) { chargingFlag = 0; }		// Runs if cells need to be balanced
-			else { BMS_state = 1; }		// Cells do not need to be balanced. BMS returns to ACTIVE state
 
-			// While loop for cell balancing
-			while(chargingFlag == 0) {
-				// Acceptable delta is 10 mV
-				// For deltas between 11 mV - 49 mV, discharge for 30 seconds at a time
-				// For deltas greater than 50 mV, discharge for 1 minute at a time
-
-				// For loop below sorts the cells that need to balanced (cellsToBalance array) in descending order
-			    for (uint8_t i = 0; i < cellsToBalanceQty - 1; i++) {
-			        for (uint8_t j = 0; j < cellsToBalanceQty - i - 1; j++) {
-			            if (cellsToBalance[j] < cellsToBalance[j + 1]) {
-			                uint8_t dummy = cellsToBalance[j];
-			                cellsToBalance[j] = cellsToBalance[j + 1];
-			                cellsToBalance[j + 1] = dummy;
-			            }
-			        }
-			    }
-			    //balance_cells(cellsToBalance, cellsToBalanceQty);
-
-				while (1) {
-					HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
-					HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
-					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
-					HAL_Delay(200);
-					HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
-					HAL_Delay(200);
+				for(uint8_t i = 0; i < CELL_QTY; i++) {
+					if(cellVoltages[i] > MAX_CELL_VOLTAGE) {
+						overvoltFlag = 1;
+						faultingCellIndex = i + 1;
+						faultingCellVoltage = cellVoltages[i];
+					}
+					else if(cellVoltages[i] < MIN_CELL_VOLTAGE) {
+						undervoltFlag = 1;
+						faultingCellIndex = i + 1;
+						faultingCellVoltage = cellVoltages[i];
+					}
 				}
+				if(overvoltFlag) { overvolts++; }
+
+				if(undervoltFlag) { undervolts++; }
+
+				if(overvoltFlag == 0 && undervoltFlag == 0) {
+					if(overvolts > 0) { overvolts--; }
+
+					if(undervolts > 0) { undervolts--; }
+				}
+				// OVERVOLT/UNDERVOLT FAULTS
+				if(overvolts > ATTEMPT_LIMIT) {
+					error_loop(ERROR_OVERVOLT, faultingCellVoltage, faultingCellIndex);
+				}
+				if(undervolts > ATTEMPT_LIMIT) {
+					error_loop(ERROR_UNDERVOLT, faultingCellVoltage, faultingCellIndex);
+				}
+
+				overvoltFlag = 0;
+				undervoltFlag = 0;
+				measureCounter = 0;
 			}
 
-		}
-		// !! DEBUG state !!
-		while(BMS_state == 3) {
+			if(transmitCounter > 1000) {
+				transmit_voltages(cellVoltages);
+				transmit_temperatures(temperatures);
+				transmitCounter = 0;
+			}
 
-		}
-		// !! ERROR state !!
-		while(BMS_state == 0) {
+			if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
+				uint8_t attempts = 0;
 
+				while(attempts < ATTEMPT_LIMIT) {
+					if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK) {
+
+						if(RxHeader.StdId == CAN_FAULT_ID) { silent_error_loop(); }
+
+						attempts = 13;
+					}
+					else {
+						attempts++;
+						wait(5);
+					}
+				}
+
+				if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
+			}
+			if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO1) > 0) {
+				uint8_t attempts = 0;
+
+				while(attempts < ATTEMPT_LIMIT) {
+					if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO1, &RxHeader, RxData) == HAL_OK) {
+						if(RxHeader.StdId == CAN_PACK_STAT_ID) {
+							packCurrent = (uint16_t)RxData[0] | ((uint16_t)RxData[1] << 8);
+							switch(RxData[5]) {
+								case 3:					// CHARGE
+									state = CHARGE;
+									break;
+								case 4:					// Fault
+									silent_error_loop();
+									break;
+								default:				// ACTIVE
+									state = ACTIVE;
+									break;
+							}
+						}
+						attempts = 13;
+					}
+					else {
+						attempts++;
+						wait(5);
+					}
+				}
+				if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
+			}
+
+			wait(1);
 		}
+		if(state == CHARGE) {
+			pull_low(GPIOA, GPIO_PIN_8);		// TURN OFF ACTIVE LED
+			pull_high(GPIOC, GPIO_PIN_9);		// TURN ON CHARGE LED
+
+			//HAL_CAN_Stop(&hcan1);
+			//HAL_CAN_DeInit(&hcan1);
+			//MX_CAN1_Init(0);
+			//HAL_CAN_Start(&hcan1);
+
+			transmitCounter = 0;
+			measureCounter = 0;
+		}
+		while(state == CHARGE) {
+			if(measureCounter > 100) {
+				if(!refup_check()) {
+					force_refup();
+					wait(1);
+				}
+
+				temperature_sense(temperatures);
+				voltage_sense(cellVoltages);
+
+				for(uint8_t i = 0; i < THERM_QTY; i++) {
+					if(temperatures[i] > MAX_TEMPERATURE) {
+						overheatFlag = 1;
+						faultingThermistorIndex = i + 1;
+						faultingTemperature = temperatures[i];
+					}
+				}
+				if(overheatFlag) { overheats++; }
+
+				else {
+					if(overheats > 0) { overheats--; }
+				}
+				// MODULE OVERHEAT FAULT
+				if(overheats > ATTEMPT_LIMIT) {
+					float tempScale = 1000.0f;
+					uint16_t intFaultingTemperature = (uint16_t)(faultingTemperature * tempScale);
+
+					error_loop(ERROR_OVERHEAT, intFaultingTemperature, faultingThermistorIndex);
+				}
+
+				for(uint8_t i = 0; i < CELL_QTY; i++) {
+					if(cellVoltages[i] > MAX_CELL_VOLTAGE) {
+						overvoltFlag = 1;
+						faultingCellIndex = i + 1;
+						faultingCellVoltage = cellVoltages[i];
+					}
+					else if(cellVoltages[i] < MIN_CELL_VOLTAGE) {
+						undervoltFlag = 1;
+						faultingCellIndex = i + 1;
+						faultingCellVoltage = cellVoltages[i];
+					}
+				}
+				if(overvoltFlag) { overvolts++; }
+
+				if(undervoltFlag) { undervolts++; }
+
+				if(overvoltFlag == 0 && undervoltFlag == 0) {
+					if(overvolts > 0) { overvolts--; }
+
+					if(undervolts > 0) { undervolts--; }
+				}
+				// UNDERVOLT FAULTS
+
+				if(undervolts > ATTEMPT_LIMIT) {
+					error_loop(ERROR_UNDERVOLT, faultingCellVoltage, faultingCellIndex);
+				}
+
+				// Overvolt means charging's done
+				if(overvolts > ATTEMPT_LIMIT) {
+					// do nothing (no fault)
+				}
+
+				overvoltFlag = 0;
+				undervoltFlag = 0;
+				measureCounter = 0;
+			}
+
+			if(transmitCounter > 1000) {
+				transmit_voltages(cellVoltages);
+				transmit_temperatures(temperatures);
+				transmitCounter = 0;
+			}
+
+			if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
+				uint8_t attempts = 0;
+
+				while(attempts < ATTEMPT_LIMIT) {
+					if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK) {
+
+						if(RxHeader.StdId == CAN_FAULT_ID) { silent_error_loop(); }
+
+						if(RxHeader.StdId == CAN_MIN_VCELL_ID) { globalMinCellVoltage = (uint16_t)RxData[0] | ((uint16_t)RxData[1] << 8); }
+
+						attempts = 13;
+					}
+					else {
+						attempts++;
+						wait(5);
+					}
+				}
+				if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
+			}
+			if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO1) > 0) {
+				uint8_t attempts = 0;
+
+				while(attempts < ATTEMPT_LIMIT) {
+					if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO1, &RxHeader, RxData) == HAL_OK) {
+						if(RxHeader.StdId == CAN_PACK_STAT_ID) {
+							packCurrent = (uint16_t)RxData[0] | ((uint16_t)RxData[1] << 8);
+							switch(RxData[5]) {
+								case 3:					// CHARGE
+									state = CHARGE;
+									break;
+								case 4:					// Fault
+									silent_error_loop();
+									break;
+								default:				// ACTIVE
+									state = ACTIVE;
+									break;
+							}
+						}
+						attempts = 13;
+					}
+					else {
+						attempts++;
+						wait(5);
+					}
+				}
+				if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
+			}
+			if(globalMinCellVoltage > 0) {
+
+			}
+
+			wait(1);
+		}
+	}
+
+	// !! MODE = 4 IS BALANCE TEST CODE !!
+	if(mode == 4) {
+		force_refup();
+		wait(1);
+		pull_low(GPIOA, GPIO_PIN_8);		// TURN OFF ACTIVE LED
+		pull_high(GPIOC, GPIO_PIN_9);		// TURN ON CHARGE LED
+		resistor_temp_sense();
+	}
+	mode = 0;
+
+	uint8_t cellsToBalance[CELL_QTY] = {0};
+	uint8_t cellsToBalanceQty = 0;
+
+		/*
+		temperature_sense(temperatures);
+		voltage_sense(cellVoltages);
+
+		cell_sorter(cellsToBalance, cellVoltages);
+		for(uint8_t i = 0; i < CELL_QTY; i++) {
+			if(cellsToBalance[i] > 0) { cellsToBalanceQty++; }
+		}*/
+
+		// start test
+		/*uint16_t sideA_SC;
+		uint16_t sideA_VA;
+		uint16_t sideA_ITMP;
+		uint8_t sideA_statusRegisterGroupA[8];
+
+		uint16_t sideB_SC;
+		uint16_t sideB_VA;
+		uint16_t sideB_ITMP;
+		uint8_t sideB_statusRegisterGroupA[8];
+
+		ADSTAT(SIDE_A);
+		ADSTAT(SIDE_B);
+		HAL_Delay(2);
+		RDSTATA(sideA_statusRegisterGroupA, SIDE_A);
+		RDSTATA(sideB_statusRegisterGroupA, SIDE_B);
+
+	    sideA_SC = (sideA_statusRegisterGroupA[1] << 8) | sideA_statusRegisterGroupA[0];
+	    sideA_ITMP = (sideA_statusRegisterGroupA[3] << 8) | sideA_statusRegisterGroupA[2];
+	    sideA_VA = (sideA_statusRegisterGroupA[5] << 8) | sideA_statusRegisterGroupA[4];
+
+	    sideB_SC = (sideB_statusRegisterGroupA[1] << 8) | sideB_statusRegisterGroupA[0];
+	    sideB_ITMP = (sideB_statusRegisterGroupA[3] << 8) | sideB_statusRegisterGroupA[2];
+	    sideB_VA = (sideB_statusRegisterGroupA[5] << 8) | sideB_statusRegisterGroupA[4];*/
+		// end test
+
+
+	while(mode == 0) {
+		  pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
+		  pull_high(GPIOC, GPIO_PIN_9);		// CHARGE LED
+		  pull_high(GPIOC, GPIO_PIN_8);		// BALANCE LED
+		  pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
+		  wait(1000);
+		  pull_low(GPIOA, GPIO_PIN_8);
+		  pull_low(GPIOC, GPIO_PIN_9);
+		  pull_low(GPIOC, GPIO_PIN_8);
+		  pull_low(GPIOC, GPIO_PIN_7);
+		  wait(1000);
 	}
 }

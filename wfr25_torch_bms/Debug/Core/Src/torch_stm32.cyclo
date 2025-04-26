@@ -1,0 +1,7 @@
+../Core/Src/torch_stm32.c:6:6:pull_low	1
+../Core/Src/torch_stm32.c:12:6:pull_high	1
+../Core/Src/torch_stm32.c:18:6:wait	1
+../Core/Src/torch_stm32.c:24:9:SPI_transmit	4
+../Core/Src/torch_stm32.c:48:9:SPI_receive	4
+../Core/Src/torch_stm32.c:73:6:start_timer	4
+../Core/Src/torch_stm32.c:109:6:stop_timer	4

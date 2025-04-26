@@ -1,0 +1,4 @@
+../Core/Src/torch_balance.c:9:6:resistor_temp_sense	1
+../Core/Src/torch_balance.c:74:6:cell_sorter	8
+../Core/Src/torch_balance.c:109:6:balance_loop	13
+../Core/Src/torch_balance.c:199:6:force_balance	22

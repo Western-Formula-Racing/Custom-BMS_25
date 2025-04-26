@@ -1,0 +1,5 @@
+../Core/Src/torch_temperature.c:7:6:read_thermistors	19
+../Core/Src/torch_temperature.c:255:6:compute_resistance	3
+../Core/Src/torch_temperature.c:273:6:compute_temperature	3
+../Core/Src/torch_temperature.c:294:6:temperature_sense	2
+../Core/Src/torch_temperature.c:308:6:board_temperature_sense	3

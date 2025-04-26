@@ -1,0 +1,7 @@
+../Core/Src/torch_stm32.c:6:6:pull_low	16	static
+../Core/Src/torch_stm32.c:12:6:pull_high	16	static
+../Core/Src/torch_stm32.c:18:6:wait	16	static
+../Core/Src/torch_stm32.c:24:9:SPI_transmit	32	static
+../Core/Src/torch_stm32.c:48:9:SPI_receive	48	static
+../Core/Src/torch_stm32.c:73:6:start_timer	24	static
+../Core/Src/torch_stm32.c:109:6:stop_timer	24	static

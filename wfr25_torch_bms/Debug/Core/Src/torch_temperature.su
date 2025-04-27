@@ -1,5 +1,5 @@
-../Core/Src/torch_temperature.c:7:6:read_thermistors	152	static
-../Core/Src/torch_temperature.c:255:6:compute_resistance	120	static
-../Core/Src/torch_temperature.c:273:6:compute_temperature	128	static
-../Core/Src/torch_temperature.c:294:6:temperature_sense	96	static
-../Core/Src/torch_temperature.c:308:6:board_temperature_sense	104	static
+../Core/Src/torch_temperature.c:8:6:compute_resistance	120	static
+../Core/Src/torch_temperature.c:26:6:compute_temperature	128	static
+../Core/Src/torch_temperature.c:47:6:temperature_sense	96	static
+../Core/Src/torch_temperature.c:61:6:board_temperature_sense	104	static
+../Core/Src/torch_temperature.c:85:6:read_thermistors	152	static

@@ -43,6 +43,8 @@ extern const uint8_t moduleID;			// Defines which module this is
 
 extern volatile uint32_t transmitCounter;
 extern volatile uint32_t measureCounter;
+extern volatile uint32_t balanceCounter;
+extern volatile uint32_t muteCounter;
 //extern volatile uint32_t canTimeoutCounter;
 
 void torch_main(void);

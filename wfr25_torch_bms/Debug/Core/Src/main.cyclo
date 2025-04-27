@@ -8,4 +8,4 @@
 ../Core/Src/main.c:409:13:MX_GPIO_Init	1
 ../Core/Src/main.c:475:6:TIM2_IRQHandler	1
 ../Core/Src/main.c:480:6:HAL_TIM_PeriodElapsedCallback	2
-../Core/Src/main.c:495:6:Error_Handler	1
+../Core/Src/main.c:497:6:Error_Handler	1

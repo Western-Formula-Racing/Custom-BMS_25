@@ -111,6 +111,8 @@ void ADCV(uint8_t side);
 
 void CLRCELL(uint8_t side);
 
+void CLRAUX(uint8_t side);
+
 void CLRSTAT(uint8_t side);
 
 void DIAGN(uint8_t side);

@@ -36,9 +36,10 @@
 ../Core/Src/torch_ltc6813.c:584:6:ADAXD	1
 ../Core/Src/torch_ltc6813.c:598:6:ADCV	1
 ../Core/Src/torch_ltc6813.c:612:6:CLRCELL	1
-../Core/Src/torch_ltc6813.c:626:6:CLRSTAT	1
-../Core/Src/torch_ltc6813.c:640:6:DIAGN	1
-../Core/Src/torch_ltc6813.c:654:6:MUTE	1
-../Core/Src/torch_ltc6813.c:668:6:UNMUTE	1
-../Core/Src/torch_ltc6813.c:682:6:force_refup	4
-../Core/Src/torch_ltc6813.c:725:9:refup_check	7
+../Core/Src/torch_ltc6813.c:626:6:CLRAUX	1
+../Core/Src/torch_ltc6813.c:640:6:CLRSTAT	1
+../Core/Src/torch_ltc6813.c:654:6:DIAGN	1
+../Core/Src/torch_ltc6813.c:668:6:MUTE	1
+../Core/Src/torch_ltc6813.c:682:6:UNMUTE	1
+../Core/Src/torch_ltc6813.c:696:6:force_refup	4
+../Core/Src/torch_ltc6813.c:739:9:refup_check	7

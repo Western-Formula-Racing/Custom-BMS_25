@@ -5,9 +5,17 @@
 
 void force_balance(uint8_t cell);
 
-void cell_sorter(uint8_t *cellsToBalance, uint16_t *cellVoltages);
+void manual_balance(void);
 
-void balance_loop(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty);
+void manual_overheat_recover(void);
+
+void manual_emergency_mute(void);
+
+uint8_t cell_sorter(uint8_t *cellsToBalance, uint16_t *cellVoltages, uint16_t *minVcell);
+
+void balance_loop(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t minVcell);
+
+void config_DCC_bits(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint8_t *payloadRegisterA, uint8_t DCTO);
 
 void resistor_temp_sense(void);
 

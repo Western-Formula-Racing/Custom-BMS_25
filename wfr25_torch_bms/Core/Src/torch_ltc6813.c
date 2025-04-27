@@ -601,7 +601,7 @@ void ADCV(uint8_t side)
 	uint16_t cmd_PEC;
 
 	cmd[0] = 0x03;
-	cmd[1] = 0xE0;
+	cmd[1] = 0x70;
 	cmd_PEC = compute_PEC15(cmd, 2);
 	append_PEC(cmd, 2, cmd_PEC);
 
@@ -616,6 +616,20 @@ void CLRCELL(uint8_t side)
 
 	cmd[0] = 0x07;
 	cmd[1] = 0x11;
+	cmd_PEC = compute_PEC15(cmd, 2);
+	append_PEC(cmd, 2, cmd_PEC);
+
+	action_cmd(cmd, side);
+}
+
+
+void CLRAUX(uint8_t side)
+{
+	uint8_t cmd[4];
+	uint16_t cmd_PEC;
+
+	cmd[0] = 0x07;
+	cmd[1] = 0x12;
 	cmd_PEC = compute_PEC15(cmd, 2);
 	append_PEC(cmd, 2, cmd_PEC);
 

@@ -6,9 +6,12 @@
 #include "torch_balance.h"
 
 
-const uint8_t moduleID = 1;
+const uint8_t moduleID = 2;
+
 volatile uint32_t transmitCounter;
 volatile uint32_t measureCounter;
+volatile uint32_t balanceCounter;
+volatile uint32_t muteCounter;
 //volatile uint32_t canTimeoutCounter;
 
 uint8_t mode;
@@ -25,8 +28,12 @@ void torch_main(void)
 	uint16_t cellVoltages[CELL_QTY];		// Holds all cell voltages within a module
 	float temperatures[THERM_QTY];			// Holds all module thermistor temperatures
 
+	uint8_t cellsToBalance[CELL_QTY] = {0};
+	uint8_t cellsToBalanceQty = 0;
+
 	uint16_t packCurrent;
 	uint16_t globalMinCellVoltage = 0;			// Holds the minimum cell voltage in the entire pack
+	uint16_t localMinCellVoltage = 0;
 
 	uint8_t overheats = 0;
 	uint8_t overheatFlag = 0;
@@ -36,6 +43,11 @@ void torch_main(void)
 
 	uint8_t undervolts = 0;
 	uint8_t undervoltFlag = 0;
+
+	uint8_t doneChargingFlag = 0;		// Status flag that defines how CHARGE state came to an end
+		// 0 means pack has not finished charging (default)
+		// 1 means motherboard sent BMS_Min_VCELL message
+		// 2 means
 
 	uint8_t faultingThermistorIndex;
 	float faultingTemperature;
@@ -50,7 +62,7 @@ void torch_main(void)
 
 	// 2 SECOND BUFFER
 	start_timer(&htim2);
-	while (Counter <= 2000) {
+	while(Counter <= 2000) {
 		wait(1);
 	}
 	stop_timer(&htim2);
@@ -192,14 +204,10 @@ void torch_main(void)
 			pull_low(GPIOA, GPIO_PIN_8);		// TURN OFF ACTIVE LED
 			pull_high(GPIOC, GPIO_PIN_9);		// TURN ON CHARGE LED
 
-			//HAL_CAN_Stop(&hcan1);
-			//HAL_CAN_DeInit(&hcan1);
-			//MX_CAN1_Init(0);
-			//HAL_CAN_Start(&hcan1);
-
 			transmitCounter = 0;
 			measureCounter = 0;
 		}
+		// *** BEGIN CHARGE LOOP ***
 		while(state == CHARGE) {
 			if(measureCounter > 100) {
 				if(!refup_check()) {
@@ -259,7 +267,7 @@ void torch_main(void)
 
 				// Overvolt means charging's done
 				if(overvolts > ATTEMPT_LIMIT) {
-					// do nothing (no fault)
+					error_loop(ERROR_OVERVOLT, faultingCellVoltage, faultingCellIndex);
 				}
 
 				overvoltFlag = 0;
@@ -307,7 +315,8 @@ void torch_main(void)
 									silent_error_loop();
 									break;
 								default:				// ACTIVE
-									state = ACTIVE;
+									//state = ACTIVE;
+									doneChargingFlag = 1;
 									break;
 							}
 						}
@@ -320,26 +329,29 @@ void torch_main(void)
 				}
 				if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
 			}
-			if(globalMinCellVoltage > 0) {
-
-			}
 
 			wait(1);
 		}
+		// *** END CHARGE LOOP ***
 	}
 
 	// !! MODE = 4 IS BALANCE TEST CODE !!
 	if(mode == 4) {
+		start_timer(&htim2);
 		force_refup();
 		wait(1);
 		pull_low(GPIOA, GPIO_PIN_8);		// TURN OFF ACTIVE LED
 		pull_high(GPIOC, GPIO_PIN_9);		// TURN ON CHARGE LED
-		resistor_temp_sense();
-	}
-	mode = 0;
 
-	uint8_t cellsToBalance[CELL_QTY] = {0};
-	uint8_t cellsToBalanceQty = 0;
+		voltage_sense(cellVoltages);
+
+		cellsToBalanceQty = cell_sorter(cellsToBalance, cellVoltages, &localMinCellVoltage);
+
+		manual_balance();
+		//manual_overheat_recover();
+	}
+	stop_timer(&htim2);
+	mode = 0;
 
 		/*
 		temperature_sense(temperatures);

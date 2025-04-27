@@ -27,6 +27,10 @@ void resistor_temp_sense(void)
 	float sideA_temperatures[9];
 	float sideB_temperatures[9];
 
+	CLRAUX(SIDE_A);
+	CLRAUX(SIDE_B);
+	wait(3);
+
 	ADAXD(SIDE_A);
 	ADAXD(SIDE_B);
 	wait(3);
@@ -68,10 +72,19 @@ void resistor_temp_sense(void)
 
 	board_temperature_sense(sideA_boardThermistorVoltages, sideA_VREF2, sideA_temperatures);
 	board_temperature_sense(sideB_boardThermistorVoltages, sideB_VREF2, sideB_temperatures);
+
+	for(uint8_t i = 0; i < 9; i++) {
+		if((sideA_temperatures[i] > 60 && sideA_temperatures[i] < 115) || (sideB_temperatures[i] > 60 && sideB_temperatures[i] < 115)) {
+			pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
+		}
+		if(sideA_temperatures[i] > 115 || sideB_temperatures[i] > 115) {
+			manual_emergency_mute();
+		}
+	}
 }
 
 
-void cell_sorter(uint8_t *cellsToBalance, uint16_t *cellVoltages)
+uint8_t cell_sorter(uint8_t *cellsToBalance, uint16_t *cellVoltages, uint16_t *minVcell)
 {
 	uint16_t minCellVoltage = *cellVoltages;
 	uint8_t minCellVoltageIndex = 0;
@@ -84,6 +97,7 @@ void cell_sorter(uint8_t *cellsToBalance, uint16_t *cellVoltages)
 			minCellVoltageIndex = i;
 		}
 	}
+	*minVcell = minCellVoltage;
 
 	// For loop below finds all cells that have a delta greater than the maximum delta
 	for(uint8_t i = 0; i < CELL_QTY; i++) {
@@ -103,100 +117,316 @@ void cell_sorter(uint8_t *cellsToBalance, uint16_t *cellVoltages)
             }
         }
     }
+    return cellsToBalanceQty;
 }
 
 
-void balance_loop(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty)
+void balance_loop(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t minCellVoltage)
 {
-	uint8_t evenCellCount = 0;
-	uint8_t oddCellCount = 0;
+	uint8_t balanceCycleFlag = 1;
+	uint8_t balanceFlag = 1;
+	while(balanceFlag) {
 
-	// For loop below counts up all the even & odd cells that need to be balanced
-	for(uint8_t i = 0; i < cellsToBalanceQty; i ++) {
-		if(*(cellsToBalance + i) % 2 == 0) {
-			evenCellCount++;
+		uint8_t evenCellCount = 0;
+		uint8_t oddCellCount = 0;
+
+		// For loop below counts up all the even & odd cells that need to be balanced
+		for(uint8_t i = 0; i < cellsToBalanceQty; i++) {
+			if(*(cellsToBalance + i) != 0) {
+				if(*(cellsToBalance + i) % 2 == 0) {
+					evenCellCount++;
+				}
+				else {
+					oddCellCount++;
+				}
+			}
 		}
 
-		else {
-			oddCellCount++;
-		}
-	}
+		uint8_t evenCells[evenCellCount];
+		uint8_t oddCells[oddCellCount];
+		uint8_t evenIndex = 0;
+		uint8_t oddIndex = 0;
 
-	uint8_t evenCells[evenCellCount];
-	uint8_t oddCells[oddCellCount];
-	uint8_t evenIndex = 0;
-	uint8_t oddIndex = 0;
-
-	// For loop below assigns all even and odd cells in need of balancing to their own arrays
-	for(uint8_t i = 0; i < cellsToBalanceQty; i++) {
-		if(*(cellsToBalance + i) % 2 == 0) {
-			evenCells[evenIndex++] = *(cellsToBalance + i);
-		}
-
-		else {
-			oddCells[oddIndex++] = *(cellsToBalance + i);
-		}
-	}
-
-	uint8_t sideAEvenCount = 0;
-	uint8_t sideAOddCount = 0;
-	uint8_t sideBEvenCount = 0;
-	uint8_t sideBOddCount = 0;
-
-	// For loop below counts up all the side A even & odd cells
-	for(uint8_t i = 0; i < evenCellCount; i++) {
-		if(evenCells[i] > 10) {
-			sideBEvenCount++;
+		// For loop below assigns all even and odd cells in need of balancing to their own arrays
+		for(uint8_t i = 0; i < cellsToBalanceQty; i++) {
+			if(*(cellsToBalance + i) != 0) {
+				if(*(cellsToBalance + i) % 2 == 0) {
+					evenCells[evenIndex++] = *(cellsToBalance + i);
+				}
+				else {
+					oddCells[oddIndex++] = *(cellsToBalance + i);
+				}
+			}
 		}
 
-		else {
-			sideAEvenCount++;
+		uint8_t sideAEvenCount = 0;
+		uint8_t sideAOddCount = 0;
+		uint8_t sideBEvenCount = 0;
+		uint8_t sideBOddCount = 0;
+
+		// For loop below counts up all the side A even & odd cells
+		for(uint8_t i = 0; i < evenCellCount; i++) {
+			if(evenCells[i] > 10) {
+				sideBEvenCount++;
+			}
+
+			else {
+				sideAEvenCount++;
+			}
 		}
-	}
-	// For loop below counts up all the side B even & odd cells
-	for(uint8_t i = 0; i < oddCellCount; i++) {
-		if(oddCells[i] > 9) {
-			sideBOddCount++;
+		// For loop below counts up all the side B even & odd cells
+		for(uint8_t i = 0; i < oddCellCount; i++) {
+			if(oddCells[i] > 9) {
+				sideBOddCount++;
+			}
+
+			else {
+				sideAOddCount++;
+			}
 		}
 
-		else {
-			sideAOddCount++;
-		}
-	}
+		uint8_t sideAEvenCells[sideAEvenCount];
+		uint8_t sideAOddCells[sideAOddCount];
+		uint8_t sideBEvenCells[sideBEvenCount];
+		uint8_t sideBOddCells[sideBOddCount];
+		uint8_t sideAEvenIndex = 0;
+		uint8_t sideAOddIndex = 0;
+		uint8_t sideBEvenIndex = 0;
+		uint8_t sideBOddIndex = 0;
 
-	uint8_t sideAEvenCells[sideAEvenCount];
-	uint8_t sideAOddCells[sideAOddCount];
-	uint8_t sideBEvenCells[sideBEvenCount];
-	uint8_t sideBOddCells[sideBOddCount];
-	uint8_t sideAEvenIndex = 0;
-	uint8_t sideAOddIndex = 0;
-	uint8_t sideBEvenIndex = 0;
-	uint8_t sideBOddIndex = 0;
+		// For loop below sets up the two side A even & odd cells to balance
+		for(uint8_t i = 0; i < evenCellCount; i++) {
+			if(evenCells[i] > 10) {
+				sideBEvenCells[sideBEvenIndex++] = evenCells[i] - 10;
+			}
 
-	// For loop below sets up the two side A even & odd cells to balance
-	for(uint8_t i = 0; i < evenCellCount; i++) {
-		if(evenCells[i] > 10) {
-			sideBEvenCells[sideBEvenIndex++] = evenCells[i] - 10;
+			else {
+				sideAEvenCells[sideAEvenIndex++] = evenCells[i];
+			}
+		}
+		// For loop below sets up the two side B even & odd cells to balance
+		for(uint8_t i = 0; i < oddCellCount; i++) {
+			if(oddCells[i] > 9) {
+				sideBOddCells[sideBOddIndex++] = oddCells[i] - 10;
+			}
+
+			else {
+				sideAOddCells[sideAOddIndex++] = oddCells[i];
+			}
 		}
 
-		else {
-			sideAEvenCells[sideAEvenIndex++] = evenCells[i];
-		}
-	}
-	// For loop below sets up the two side B even & odd cells to balance
-	for(uint8_t i = 0; i < oddCellCount; i++) {
-		if(oddCells[i] > 9) {
-			sideBOddCells[sideBOddIndex++] = oddCells[i] - 10;
-		}
+		uint16_t cellVoltages[CELL_QTY];
+		float moduleTemperatures[THERM_QTY];
+		float pcbTemperatures[18];
 
-		else {
-			sideAOddCells[sideAOddIndex++] = oddCells[i];
+		uint8_t sideA_payloadRegisterA[8];
+		uint8_t sideB_payloadRegisterA[8];
+		uint8_t DCTO = 0x6;
+
+		sideA_payloadRegisterA[0] = 0xFE;
+		sideA_payloadRegisterA[1] = 0x00;
+		sideA_payloadRegisterA[2] = 0x00;
+		sideA_payloadRegisterA[3] = 0x00;
+
+		sideB_payloadRegisterA[0] = 0xFE;
+		sideB_payloadRegisterA[1] = 0x00;
+		sideB_payloadRegisterA[2] = 0x00;
+		sideB_payloadRegisterA[3] = 0x00;
+
+		config_DCC_bits(sideAEvenCells, sideAEvenCount, sideA_payloadRegisterA, DCTO);
+		config_DCC_bits(sideBEvenCells, sideBEvenCount, sideB_payloadRegisterA, DCTO);
+
+		uint8_t muteFlag = 0;
+
+		balanceCycleFlag = 1;
+		pull_high(GPIOC, GPIO_PIN_8);	// BALANCE LED
+		balanceCounter = 0;
+		measureCounter = 0;
+		transmitCounter = 0;
+		while(balanceCycleFlag) {
+			if(measureCounter > 100) {
+				// measure module temps & PCB temps
+			}
+
+			if(transmitCounter > 1000) {
+				// transmit VCELL, T, and BALANCING messages
+			}
+
+			if(balanceCounter > 180000) {
+				MUTE(SIDE_A);
+				MUTE(SIDE_B);
+				wait(1);
+				MUTE(SIDE_A);
+				MUTE(SIDE_B);
+
+				muteFlag = 1;
+				balanceCounter = 0;
+				muteCounter = 0;
+			}
+
+			if(muteFlag == 1 && muteCounter > 20000) {
+				UNMUTE(SIDE_A);
+				UNMUTE(SIDE_B);
+				wait(1);
+				UNMUTE(SIDE_A);
+				UNMUTE(SIDE_B);
+
+				force_refup();
+				wait(1);
+
+				voltage_sense(cellVoltages);
+
+				uint8_t balancedCellsIndexes[20] = {0};
+				uint8_t balancedCellsCount = 0;
+
+				for(uint8_t i = 0; i < CELL_QTY; i++) {
+					if((cellVoltages[i] < minCellVoltage + MAX_DELTA) || (cellVoltages[i] > minCellVoltage - MAX_DELTA)) {
+						balancedCellsIndexes[balancedCellsCount] = i + 1;
+						balancedCellsCount++;
+					}
+				}
+				if(balancedCellsCount > 0) {
+					for(uint8_t i = 0; i < CELL_QTY; i++) {
+						for(uint8_t j = 0; j < CELL_QTY; j++) {
+							if(balancedCellsIndexes[j] == *(cellsToBalance + i) && balancedCellsIndexes[j] != 0) {
+								*(cellsToBalance + i) = 0;
+							}
+						}
+					}
+					balanceCycleFlag = 0;
+				}
+				muteFlag = 0;
+			}
+			wait(1);
 		}
 	}
 }
 
 
-void force_balance(uint8_t cell)
+void config_DCC_bits(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint8_t *payloadRegisterA, uint8_t DCTO)
+{
+	uint8_t DCC1 = 0;
+	uint8_t DCC2 = 0;
+	uint8_t DCC3 = 0;
+	uint8_t DCC4 = 0;
+	uint8_t DCC5 = 0;
+	uint8_t DCC6 = 0;
+	uint8_t DCC7 = 0;
+	uint8_t DCC8 = 0;
+	uint8_t DCC9 = 0;
+	uint8_t DCC10 = 0;
+
+	for(uint8_t i = 0; i < cellsToBalanceQty; i++) {
+		switch(*(cellsToBalance + i)) {
+			case 1:
+				DCC1 = 1;
+				break;
+			case 2:
+				DCC2 = 1;
+				break;
+			case 3:
+				DCC3 = 1;
+				break;
+			case 4:
+				DCC4 = 1;
+				break;
+			case 5:
+				DCC5 = 1;
+				break;
+			case 6:
+				DCC6 = 1;
+				break;
+			case 7:
+				DCC7 = 1;
+				break;
+			case 8:
+				DCC8 = 1;
+				break;
+			case 9:
+				DCC9 = 1;
+				break;
+			case 10:
+				DCC10 = 1;
+				break;
+		}
+	}
+	*(payloadRegisterA + 4) = (DCC8 << 7) | (DCC7 << 6) | (DCC6 << 5) | (DCC5 << 4) | (DCC4 << 3) | (DCC3 << 2) | (DCC2 << 1) | (DCC1 << 0);
+	*(payloadRegisterA + 5) = (DCTO << 4) | (DCC10 << 1) | (DCC9 << 0);
+}
+
+
+void manual_balance(void)
+{
+	float temperatures[THERM_QTY];
+
+	uint8_t sideA_payloadRegisterA[8];
+	uint8_t sideB_payloadRegisterA[8];
+
+	sideA_payloadRegisterA[0] = 0xFE;
+	sideA_payloadRegisterA[1] = 0x00;
+	sideA_payloadRegisterA[2] = 0x00;
+	sideA_payloadRegisterA[3] = 0x00;
+
+	sideB_payloadRegisterA[0] = 0xFE;
+	sideB_payloadRegisterA[1] = 0x00;
+	sideB_payloadRegisterA[2] = 0x00;
+	sideB_payloadRegisterA[3] = 0x00;
+
+	// Tune 4 lines below for DCC & DCTO (DCTO should be 2 minutes, hence the 0x30)
+	sideA_payloadRegisterA[4] = 0x00;
+	sideA_payloadRegisterA[5] = 0x00;			// 0x30
+	sideB_payloadRegisterA[4] = 0x00;
+	sideB_payloadRegisterA[5] = 0x00;			// 0x30
+
+	pull_high(GPIOC, GPIO_PIN_8);		// BALANCE LED
+
+	WRCFGA(sideA_payloadRegisterA, SIDE_A);
+	WRCFGA(sideB_payloadRegisterA, SIDE_B);
+	wait(1);
+
+	balanceCounter = 0;
+	while(balanceCounter < 120000) {
+		//resistor_temp_sense();
+
+		temperature_sense(temperatures);
+
+		for(uint8_t i = 0; i < THERM_QTY; i++) {
+			if(temperatures[i] > 60) {
+				manual_emergency_mute();
+			}
+		}
+		wait(2);
+	}
+
+}
+
+
+void manual_emergency_mute(void)
+{
+	MUTE(SIDE_A);
+	MUTE(SIDE_B);
+	wait(1);
+	MUTE(SIDE_A);
+	MUTE(SIDE_B);
+	while(1) {
+		pull_low(GPIOC, GPIO_PIN_7);		// HOT LED
+		wait(250);
+		pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
+		wait(250);
+	}
+}
+
+
+void manual_overheat_recover(void)
+{
+	force_refup();
+	wait(1);
+	UNMUTE(SIDE_A);
+	UNMUTE(SIDE_B);
+}
+
+
+void force_balance(uint8_t cell)		// Test function
 {
 	uint8_t sideA_payloadRegisterA[8];
 	uint8_t sideB_payloadRegisterA[8];

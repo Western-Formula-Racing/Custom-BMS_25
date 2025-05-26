@@ -6,7 +6,7 @@
 #include "torch_balance.h"
 
 
-const uint8_t moduleID = 2;
+const uint8_t moduleID = 1;
 
 volatile uint32_t transmitCounter;
 volatile uint32_t measureCounter;
@@ -20,6 +20,9 @@ uint8_t state;
 
 void torch_main(void)
 {
+	// mode = 0 is perma blink
+	// mode = 3 is NORMAL program
+	// mode = 4 is for development
 	mode = 3;
 
 	CAN_RxHeaderTypeDef RxHeader;
@@ -61,11 +64,13 @@ void torch_main(void)
 	pull_high(GPIOD, GPIO_PIN_2);		// LTC6820 side B force EN
 
 	// 2 SECOND BUFFER
+	/*
 	start_timer(&htim2);
 	while(Counter <= 2000) {
 		wait(1);
 	}
 	stop_timer(&htim2);
+	*/
 
 	setup_PEC15();
 
@@ -145,10 +150,12 @@ void torch_main(void)
 				measureCounter = 0;
 			}
 
-			if(transmitCounter > 1000) {
+			if(transmitCounter > 1000) {			// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
+				//pull_high(GPIOC, GPIO_PIN_9);
 				transmit_voltages(cellVoltages);
 				transmit_temperatures(temperatures);
 				transmitCounter = 0;
+				//pull_low(GPIOC, GPIO_PIN_9);
 			}
 
 			if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
@@ -177,10 +184,10 @@ void torch_main(void)
 						if(RxHeader.StdId == CAN_PACK_STAT_ID) {
 							packCurrent = (uint16_t)RxData[0] | ((uint16_t)RxData[1] << 8);
 							switch(RxData[5]) {
-								case 3:					// CHARGE
+								case 4:					// CHARGE
 									state = CHARGE;
 									break;
-								case 4:					// Fault
+								case 6:					// Fault
 									silent_error_loop();
 									break;
 								default:				// ACTIVE
@@ -275,7 +282,7 @@ void torch_main(void)
 				measureCounter = 0;
 			}
 
-			if(transmitCounter > 1000) {
+			if(transmitCounter > 1000) {					// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
 				transmit_voltages(cellVoltages);
 				transmit_temperatures(temperatures);
 				transmitCounter = 0;
@@ -308,10 +315,13 @@ void torch_main(void)
 						if(RxHeader.StdId == CAN_PACK_STAT_ID) {
 							packCurrent = (uint16_t)RxData[0] | ((uint16_t)RxData[1] << 8);
 							switch(RxData[5]) {
-								case 3:					// CHARGE
+								case 4:					// CHARGE
 									state = CHARGE;
 									break;
-								case 4:					// Fault
+								case 5:
+									state = DONE_CHARGE;
+									break;
+								case 6:					// Fault
 									silent_error_loop();
 									break;
 								default:				// ACTIVE
@@ -333,6 +343,25 @@ void torch_main(void)
 			wait(1);
 		}
 		// *** END CHARGE LOOP ***
+		// *** BEGIN CHARGE COMPLETE LOOP ***
+		while(state == DONE_CHARGE) {
+			stop_timer(&htim2);
+			HAL_CAN_Stop(&hcan1);
+
+			while(1) {
+				  pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
+				  pull_high(GPIOC, GPIO_PIN_9);		// CHARGE LED
+				  pull_high(GPIOC, GPIO_PIN_8);		// BALANCE LED
+				  pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
+				  wait(500);
+				  pull_low(GPIOA, GPIO_PIN_8);
+				  pull_low(GPIOC, GPIO_PIN_9);
+				  pull_low(GPIOC, GPIO_PIN_8);
+				  pull_low(GPIOC, GPIO_PIN_7);
+				  wait(500);
+			}
+		}
+		// *** END CHARGE COMPLETE LOOP ***
 	}
 
 	// !! MODE = 4 IS BALANCE TEST CODE !!

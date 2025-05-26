@@ -380,13 +380,13 @@ void manual_balance(void)
 
 	pull_high(GPIOC, GPIO_PIN_8);		// BALANCE LED
 
-	WRCFGA(sideA_payloadRegisterA, SIDE_A);
-	WRCFGA(sideB_payloadRegisterA, SIDE_B);
+	//WRCFGA(sideA_payloadRegisterA, SIDE_A);
+	//WRCFGA(sideB_payloadRegisterA, SIDE_B);
 	wait(1);
 
 	balanceCounter = 0;
-	while(balanceCounter < 120000) {
-		//resistor_temp_sense();
+	while(balanceCounter < 10000) {
+		resistor_temp_sense();
 
 		temperature_sense(temperatures);
 

@@ -91,10 +91,6 @@ void write_cmd(uint8_t *cmd_ptr, uint8_t *payload_ptr, uint8_t sideA)
 {
 	// TO LTC SIDE A (CELL 1 to 10)
 	if(sideA) {
-		/*HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-		HAL_SPI_Transmit(&hspi1, cmd_ptr, CMD_LEN, HAL_MAX_DELAY);
-		HAL_SPI_Transmit(&hspi1, payload_ptr, PAYLOAD_LEN, HAL_MAX_DELAY);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);*/
 		pull_low(GPIOA, GPIO_PIN_4);
 		SPI_transmit(&hspi1, cmd_ptr, CMD_LEN);
 		SPI_transmit(&hspi1, payload_ptr, PAYLOAD_LEN);
@@ -103,10 +99,6 @@ void write_cmd(uint8_t *cmd_ptr, uint8_t *payload_ptr, uint8_t sideA)
 
 	// TO LTC SIDE B (CELL 11 to 20)
 	else {
-		/*HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
-		HAL_SPI_Transmit(&hspi3, cmd_ptr, CMD_LEN, HAL_MAX_DELAY);
-		HAL_SPI_Transmit(&hspi3, payload_ptr, PAYLOAD_LEN, HAL_MAX_DELAY);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);*/
 		pull_low(GPIOA, GPIO_PIN_15);
 		SPI_transmit(&hspi3, cmd_ptr, CMD_LEN);
 		SPI_transmit(&hspi3, payload_ptr, PAYLOAD_LEN);

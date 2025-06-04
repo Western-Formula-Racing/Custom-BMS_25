@@ -58,11 +58,41 @@ void silent_error_loop(void)
 {
 	pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
 	pull_high(GPIOC, GPIO_PIN_9);		// CHARGE LED
-	stop_timer(&htim2);
-	HAL_CAN_Stop(&hcan1);
+	//stop_timer(&htim2);
+	//HAL_CAN_Stop(&hcan1);
+
+	uint16_t cellVoltages[CELL_QTY];
+	float temperatures[THERM_QTY];
+	transmitCounter = 0;
+	measureCounter = 0;
+	while(1) {
+
+		if(measureCounter > 100) {
+			if(!refup_check()) {
+				force_refup();
+				wait(1);
+			}
+
+			temperature_sense(temperatures);
+			voltage_sense(cellVoltages);
+
+			measureCounter = 0;
+		}
+
+		if(transmitCounter > 700) {			// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
+			transmit_voltages(cellVoltages);
+			transmit_temperatures(temperatures);
+
+			transmitCounter = 0;
+		}
+
+		wait(1);
+	}
+	/*
 	while(1) {
 		wait(10);
 	}
+	*/
 }
 
 
@@ -115,11 +145,41 @@ void error_loop(uint8_t errorCode, uint16_t faultValue, uint8_t faultIndex)
 	}
 	pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
 	pull_high(GPIOC, GPIO_PIN_9);		// CHARGE LED
-	stop_timer(&htim2);
+
+	uint16_t cellVoltages[CELL_QTY];
+	float temperatures[THERM_QTY];
+	transmitCounter = 0;
+	measureCounter = 0;
+	while(1) {
+
+		if(measureCounter > 100) {
+			if(!refup_check()) {
+				force_refup();
+				wait(1);
+			}
+
+			temperature_sense(temperatures);
+			voltage_sense(cellVoltages);
+
+			measureCounter = 0;
+		}
+
+		if(transmitCounter > 700) {			// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
+			can_transmit(CAN_FAULT_ID, msgFault);
+			transmit_voltages(cellVoltages);
+			transmit_temperatures(temperatures);
+
+			transmitCounter = 0;
+		}
+
+		wait(1);
+	}
+	/*
 	while(1) {
 		can_transmit(CAN_FAULT_ID, msgFault);
 		wait(1000);
 	}
+	*/
 }
 
 

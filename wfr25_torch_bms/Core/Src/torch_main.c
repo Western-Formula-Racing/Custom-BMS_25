@@ -6,7 +6,7 @@
 #include "torch_balance.h"
 
 
-const uint8_t moduleID = 1;
+const uint8_t moduleID = 3;
 
 volatile uint32_t transmitCounter;
 volatile uint32_t measureCounter;
@@ -83,6 +83,7 @@ void torch_main(void)
 		HAL_CAN_Start(&hcan1);
 		start_timer(&htim2);
 		force_refup();
+
 	}
 	while(mode == 3) {
 		while(state == ACTIVE) {
@@ -94,6 +95,8 @@ void torch_main(void)
 				}
 
 				temperature_sense(temperatures);
+
+
 				voltage_sense(cellVoltages);
 
 				for(uint8_t i = 0; i < THERM_QTY; i++) {
@@ -150,7 +153,7 @@ void torch_main(void)
 				measureCounter = 0;
 			}
 
-			if(transmitCounter > 1000) {			// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
+			if(transmitCounter > 700) {			// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
 				//pull_high(GPIOC, GPIO_PIN_9);
 				transmit_voltages(cellVoltages);
 				transmit_temperatures(temperatures);
@@ -176,6 +179,7 @@ void torch_main(void)
 
 				if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
 			}
+
 			if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO1) > 0) {
 				uint8_t attempts = 0;
 
@@ -282,7 +286,7 @@ void torch_main(void)
 				measureCounter = 0;
 			}
 
-			if(transmitCounter > 1000) {					// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
+			if(transmitCounter > 700) {					// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
 				transmit_voltages(cellVoltages);
 				transmit_temperatures(temperatures);
 				transmitCounter = 0;
@@ -307,6 +311,7 @@ void torch_main(void)
 				}
 				if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
 			}
+
 			if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO1) > 0) {
 				uint8_t attempts = 0;
 
@@ -339,6 +344,7 @@ void torch_main(void)
 				}
 				if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
 			}
+
 
 			wait(1);
 		}

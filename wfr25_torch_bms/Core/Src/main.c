@@ -484,7 +484,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         transmitCounter++;
         measureCounter++;
         balanceCounter++;
-        muteCounter++;
+        transientCounter++;
         //canTimeoutCounter++;
     }
 }

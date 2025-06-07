@@ -2,6 +2,7 @@
 #include "torch_main.h"
 #include "torch_ltc6813.h"
 #include "torch_stm32.h"
+#include "torch_can.h"
 
 uint16_t PEC15_table[256];
 uint16_t CRC15_Poly = 0x4599;
@@ -719,19 +720,7 @@ void force_refup(void)
 		}
 	}
 	if(attempts != 13) {
-		//fault nigga
-		while(1) {
-			pull_high(GPIOA, GPIO_PIN_8);
-			pull_high(GPIOC, GPIO_PIN_9);
-			pull_high(GPIOC, GPIO_PIN_8);
-			pull_high(GPIOC, GPIO_PIN_7);
-			wait(250);
-			pull_low(GPIOA, GPIO_PIN_8);
-			pull_low(GPIOC, GPIO_PIN_9);
-			pull_low(GPIOC, GPIO_PIN_8);
-			pull_low(GPIOC, GPIO_PIN_7);
-			wait(250);
-		}
+		error_loop(ERROR_PEC, 0, 0);
 	}
 }
 
@@ -768,19 +757,7 @@ uint8_t refup_check(void)
 		}
 	}
 	if(attempts != 13) {
-		//fault nigga
-		while(1) {
-			pull_high(GPIOA, GPIO_PIN_8);
-			pull_high(GPIOC, GPIO_PIN_9);
-			pull_high(GPIOC, GPIO_PIN_8);
-			pull_high(GPIOC, GPIO_PIN_7);
-			wait(250);
-			pull_low(GPIOA, GPIO_PIN_8);
-			pull_low(GPIOC, GPIO_PIN_9);
-			pull_low(GPIOC, GPIO_PIN_8);
-			pull_low(GPIOC, GPIO_PIN_7);
-			wait(250);
-		}
+		error_loop(ERROR_PEC, 0, 0);
 	}
 	if(sideA_refonBit == 1 && sideB_refonBit == 1) { return 1; }
 

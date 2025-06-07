@@ -7,16 +7,17 @@
 
 
 const uint8_t moduleID = 3;
+uint16_t transmissionDelay;
 
 volatile uint32_t transmitCounter;
 volatile uint32_t measureCounter;
 volatile uint32_t balanceCounter;
-volatile uint32_t muteCounter;
+volatile uint32_t transientCounter;
 //volatile uint32_t canTimeoutCounter;
 
 uint8_t mode;
 uint8_t state;
-
+uint8_t enableBalance = 0;
 
 void torch_main(void)
 {
@@ -57,20 +58,28 @@ void torch_main(void)
 	uint8_t faultingCellIndex;
 	uint16_t faultingCellVoltage;
 
+	switch(moduleID) {
+		case 1:
+			transmissionDelay = 900;
+			break;
+		case 2:
+			transmissionDelay = 1000;
+			break;
+		case 3:
+			transmissionDelay = 700;
+			break;
+		case 4:
+			transmissionDelay = 1100;
+			break;
+		case 5:
+			transmissionDelay = 800;
+			break;
+	}
 
 	pull_low(GPIOA, GPIO_PIN_4);		// LTC6820 side A !SS
 	pull_low(GPIOA, GPIO_PIN_15);		// LTC6820 side B !SS
 	pull_high(GPIOC, GPIO_PIN_4);		// LTC6820 side A force EN
 	pull_high(GPIOD, GPIO_PIN_2);		// LTC6820 side B force EN
-
-	// 2 SECOND BUFFER
-	/*
-	start_timer(&htim2);
-	while(Counter <= 2000) {
-		wait(1);
-	}
-	stop_timer(&htim2);
-	*/
 
 	setup_PEC15();
 
@@ -95,7 +104,6 @@ void torch_main(void)
 				}
 
 				temperature_sense(temperatures);
-
 
 				voltage_sense(cellVoltages);
 
@@ -153,12 +161,10 @@ void torch_main(void)
 				measureCounter = 0;
 			}
 
-			if(transmitCounter > 700) {			// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
-				//pull_high(GPIOC, GPIO_PIN_9);
+			if(transmitCounter > transmissionDelay) {
 				transmit_voltages(cellVoltages);
 				transmit_temperatures(temperatures);
 				transmitCounter = 0;
-				//pull_low(GPIOC, GPIO_PIN_9);
 			}
 
 			if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
@@ -286,7 +292,7 @@ void torch_main(void)
 				measureCounter = 0;
 			}
 
-			if(transmitCounter > 700) {					// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
+			if(transmitCounter > transmissionDelay) {
 				transmit_voltages(cellVoltages);
 				transmit_temperatures(temperatures);
 				transmitCounter = 0;
@@ -350,7 +356,14 @@ void torch_main(void)
 		}
 		// *** END CHARGE LOOP ***
 		// *** BEGIN CHARGE COMPLETE LOOP ***
-		while(state == DONE_CHARGE) {
+		while(state == DONE_CHARGE && enableBalance == 1) {
+			// set a timer for 12 seconds (waiting for mobo to send min cell voltage)
+			//
+			transientCounter = 0;
+			while(transientCounter < 12000) {
+
+			}
+
 			stop_timer(&htim2);
 			HAL_CAN_Stop(&hcan1);
 
@@ -372,6 +385,8 @@ void torch_main(void)
 
 	// !! MODE = 4 IS BALANCE TEST CODE !!
 	if(mode == 4) {
+
+		/*
 		start_timer(&htim2);
 		force_refup();
 		wait(1);
@@ -380,12 +395,19 @@ void torch_main(void)
 
 		voltage_sense(cellVoltages);
 
-		cellsToBalanceQty = cell_sorter(cellsToBalance, cellVoltages, &localMinCellVoltage);
+		cellsToBalanceQty = balance_check(cellsToBalance, cellVoltages, &localMinCellVoltage);
 
-		manual_balance();
-		//manual_overheat_recover();
+		if(cellsToBalanceQty > 0) {
+
+		}
+		else {
+
+		}
+
+		balance_loop(cellsToBalance, cellsToBalanceQty, localMinCellVoltage);
+		stop_timer(&htim2);
+		*/
 	}
-	stop_timer(&htim2);
 	mode = 0;
 
 		/*

@@ -79,7 +79,7 @@ void silent_error_loop(void)
 			measureCounter = 0;
 		}
 
-		if(transmitCounter > 700) {			// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
+		if(transmitCounter > transmissionDelay) {
 			transmit_voltages(cellVoltages);
 			transmit_temperatures(temperatures);
 
@@ -164,7 +164,7 @@ void error_loop(uint8_t errorCode, uint16_t faultValue, uint8_t faultIndex)
 			measureCounter = 0;
 		}
 
-		if(transmitCounter > 700) {			// Module 5 waits 800 ms. Module 3 waits 700 ms. The rest wait 1000 ms
+		if(transmitCounter > transmissionDelay) {
 			can_transmit(CAN_FAULT_ID, msgFault);
 			transmit_voltages(cellVoltages);
 			transmit_temperatures(temperatures);

@@ -11,9 +11,9 @@ void manual_overheat_recover(void);
 
 void manual_emergency_mute(void);
 
-uint8_t cell_sorter(uint8_t *cellsToBalance, uint16_t *cellVoltages, uint16_t *minVcell);
+uint8_t balance_check(uint8_t *cellsToBalance, uint16_t *cellVoltages, uint16_t *minVcell);
 
-void balance_loop(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t minVcell);
+void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t minCellVoltage);
 
 void config_DCC_bits(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint8_t *payloadRegisterA, uint8_t DCTO);
 

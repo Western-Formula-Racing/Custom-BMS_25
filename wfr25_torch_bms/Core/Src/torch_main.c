@@ -17,7 +17,6 @@ volatile uint32_t transientCounter;
 
 uint8_t mode;
 uint8_t state;
-uint8_t enableBalance = 0;
 
 void torch_main(void)
 {
@@ -37,7 +36,7 @@ void torch_main(void)
 
 	uint16_t packCurrent;
 	uint16_t globalMinCellVoltage = 0;			// Holds the minimum cell voltage in the entire pack
-	uint16_t localMinCellVoltage = 0;
+	uint16_t localMinCellVoltage = 0;			// Holds the minimum cell voltage within the module
 
 	uint8_t overheats = 0;
 	uint8_t overheatFlag = 0;
@@ -85,14 +84,21 @@ void torch_main(void)
 
 	// !! MODE = 3 IS STANDALONE ACTIVE !!
 	if(mode == 3) {
-		transmitCounter = 0;
-		measureCounter = 0;
-		state = ACTIVE;						// Change this to CHARGE if you wanna force it to start CHARGE
-		pull_high(GPIOA, GPIO_PIN_8);		// TURN ON ACTIVE LED
+		state = ACTIVE;
+		pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
+		//pull_high(GPIOC, GPIO_PIN_9);		// TURN ON CHARGE LED
 		HAL_CAN_Start(&hcan1);
 		start_timer(&htim2);
+
+		MUTE(SIDE_A);
+		MUTE(SIDE_B);
+		wait(1);
+		MUTE(SIDE_A);
+		MUTE(SIDE_B);
 		force_refup();
 
+		transmitCounter = 0;
+		measureCounter = 0;
 	}
 	while(mode == 3) {
 		while(state == ACTIVE) {
@@ -356,28 +362,75 @@ void torch_main(void)
 		}
 		// *** END CHARGE LOOP ***
 		// *** BEGIN CHARGE COMPLETE LOOP ***
-		while(state == DONE_CHARGE && enableBalance == 1) {
-			// set a timer for 12 seconds (waiting for mobo to send min cell voltage)
-			//
-			transientCounter = 0;
-			while(transientCounter < 12000) {
-
+		while(state == DONE_CHARGE && CONFIG_ENABLE_BALANCE) {
+			/*
+			if(!refup_check()) {
+				force_refup();
+				wait(1);
 			}
+			voltage_sense(cellVoltages);
 
-			stop_timer(&htim2);
-			HAL_CAN_Stop(&hcan1);
+			transientCounter = 0;
+			measureCounter = 0;
+			transmitCounter = 0;
+			while(transientCounter < 12000) {
+				if(measureCounter > 100) {
+					temperature_sense(temperatures);
+					// ADD OVERHEAT CHECK
+					measureCounter = 0;
+				}
 
-			while(1) {
-				  pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
-				  pull_high(GPIOC, GPIO_PIN_9);		// CHARGE LED
-				  pull_high(GPIOC, GPIO_PIN_8);		// BALANCE LED
-				  pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
-				  wait(500);
-				  pull_low(GPIOA, GPIO_PIN_8);
-				  pull_low(GPIOC, GPIO_PIN_9);
-				  pull_low(GPIOC, GPIO_PIN_8);
-				  pull_low(GPIOC, GPIO_PIN_7);
-				  wait(500);
+				if(transmitCounter > transmissionDelay) {
+					transmit_voltages(cellVoltages);
+					transmit_temperatures(temperatures);
+
+					transmitCounter = 0;
+				}
+
+				wait(1);
+			}
+			*/
+			if(CONFIG_LOCAL_BALANCE) {
+				force_refup();
+				wait(1);
+				voltage_sense(cellVoltages);
+
+				localMinCellVoltage = local_min_cell(cellVoltages);
+				localMinCellVoltage = 29724;		// dummy line
+				cellsToBalanceQty = balance_check(cellsToBalance, cellVoltages, localMinCellVoltage);
+
+				if(cellsToBalanceQty > 0) {
+					uint8_t balanceFlag = 1;
+					uint8_t tempLimit = 0;
+
+					while(balanceFlag && tempLimit < 10) {
+						balance_cycle(cellsToBalance, cellsToBalanceQty, localMinCellVoltage);
+
+						force_refup();
+						voltage_sense(cellVoltages);
+
+						cellsToBalanceQty = 0;
+						for(uint8_t i = 0; i < CELL_QTY; i++) { cellsToBalance[i] = 0; }
+
+						cellsToBalanceQty = balance_check(cellsToBalance, cellVoltages, localMinCellVoltage);
+
+						// BREAKPOINT
+						if(cellsToBalanceQty == 0) { balanceFlag = 0; }
+						tempLimit++;
+					}
+					pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
+				  	pull_low(GPIOC, GPIO_PIN_9);		// CHARGE LED
+					state = ACTIVE;
+				}
+				else {
+					pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
+				  	pull_low(GPIOC, GPIO_PIN_9);		// CHARGE LED
+					state = ACTIVE;
+				}
+			}
+			else {
+				// check for global min
+				cellsToBalanceQty = balance_check(cellsToBalance, cellVoltages, globalMinCellVoltage);
 			}
 		}
 		// *** END CHARGE COMPLETE LOOP ***
@@ -385,6 +438,14 @@ void torch_main(void)
 
 	// !! MODE = 4 IS BALANCE TEST CODE !!
 	if(mode == 4) {
+		start_timer(&htim2);
+		pull_low(GPIOA, GPIO_PIN_8);		// TURN OFF ACTIVE LED
+		pull_high(GPIOC, GPIO_PIN_9);		// TURN ON CHARGE LED
+		force_refup();
+		wait(1);
+
+
+		resistor_temp_sense(temperatures);
 
 		/*
 		start_timer(&htim2);

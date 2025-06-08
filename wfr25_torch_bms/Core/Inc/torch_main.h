@@ -15,6 +15,9 @@
 #define SIDE_B 0
 #define ATTEMPT_LIMIT 10
 
+#define CONFIG_ENABLE_BALANCE 1				// Toggles the TORCH balance feature. 1 means balancing's enabled, 0 means it's disabled
+#define CONFIG_LOCAL_BALANCE 1				// Toggles between using local and global minimum cell voltage as the reference for balancing. 1 means balance with respect to local min, 0 means balance with respect to global min
+
 // Limits
 #define MAX_TEMPERATURE 60
 #define MAX_CELL_VOLTAGE 42000

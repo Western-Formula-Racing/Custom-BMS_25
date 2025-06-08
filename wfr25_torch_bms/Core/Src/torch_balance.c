@@ -4,9 +4,10 @@
 #include "torch_balance.h"
 #include "torch_ltc6813.h"
 #include "torch_temperature.h"
+#include "torch_can.h"
 
 
-void resistor_temp_sense(void)
+void resistor_temp_sense(float *pcbTemperatures)
 {
 	uint8_t sideA_auxRegisterA[8];
 	uint8_t sideA_auxRegisterB[8];
@@ -73,31 +74,28 @@ void resistor_temp_sense(void)
 	board_temperature_sense(sideA_boardThermistorVoltages, sideA_VREF2, sideA_temperatures);
 	board_temperature_sense(sideB_boardThermistorVoltages, sideB_VREF2, sideB_temperatures);
 
-	for(uint8_t i = 0; i < 9; i++) {
-		if((sideA_temperatures[i] > 60 && sideA_temperatures[i] < 115) || (sideB_temperatures[i] > 60 && sideB_temperatures[i] < 115)) {
-			pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
-		}
-		if(sideA_temperatures[i] > 115 || sideB_temperatures[i] > 115) {
-			manual_emergency_mute();
-		}
-	}
+	for(uint8_t i = 0; i < 9; i++) { *(pcbTemperatures + i) = sideA_temperatures[i]; }
+
+	for(uint8_t i = 9; i < 18; i++) { *(pcbTemperatures + i) = sideB_temperatures[i]; }
 }
 
 
-uint8_t balance_check(uint8_t *cellsToBalance, uint16_t *cellVoltages, uint16_t *minVcell)
+uint16_t local_min_cell(uint16_t *cellVoltages)
 {
 	uint16_t minCellVoltage = *cellVoltages;
-	uint8_t minCellVoltageIndex = 0;
-	uint8_t cellsToBalanceQty = 0;
 
-	// For loop below finds the minimum cell voltage & its index
 	for(uint8_t i = 1; i < CELL_QTY; i++) {
 		if(*(cellVoltages + i) < minCellVoltage) {
 			minCellVoltage = *(cellVoltages + i);
-			minCellVoltageIndex = i;
 		}
 	}
-	*minVcell = minCellVoltage;
+	return minCellVoltage;
+}
+
+
+uint8_t balance_check(uint8_t *cellsToBalance, uint16_t *cellVoltages, uint16_t minCellVoltage)
+{
+	uint8_t cellsToBalanceQty = 0;
 
 	// For loop below finds all cells that have a delta greater than the maximum delta
 	for(uint8_t i = 0; i < CELL_QTY; i++) {
@@ -214,15 +212,25 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 		}
 	}
 
+	if(evenCellCount == 0) { evenCellsFlag = 0; }
+
+	if(oddCellCount == 0) { oddCellsFlag = 0; }
+
 	uint16_t cellVoltages[CELL_QTY];
 	float moduleTemperatures[THERM_QTY];
 	float pcbTemperatures[18];
+
+	uint8_t overheats = 0;
+	uint8_t overheatFlag = 0;
+
+	uint8_t faultingThermistorIndex;
+	float faultingTemperature;
 
 	uint8_t sideA_payloadRegisterA_evenCells[8];
 	uint8_t sideB_payloadRegisterA_evenCells[8];
 	uint8_t sideA_payloadRegisterA_oddCells[8];
 	uint8_t sideB_payloadRegisterA_oddCells[8];
-	uint8_t DCTO = 0x6;
+	uint8_t DCTO = 0x2;
 
 	sideA_payloadRegisterA_evenCells[0] = 0xFE;
 	sideA_payloadRegisterA_evenCells[1] = 0x00;
@@ -250,24 +258,73 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 	config_DCC_bits(sideAEvenCells, sideAEvenCount, sideA_payloadRegisterA_oddCells, DCTO);
 	config_DCC_bits(sideBEvenCells, sideBEvenCount, sideB_payloadRegisterA_oddCells, DCTO);
 
-	uint8_t muteFlag = 0;
+	if(!refup_check()) {
+		force_refup();
+		wait(1);
+	}
+	voltage_sense(cellVoltages);
 
 	pull_high(GPIOC, GPIO_PIN_8);	// BALANCE LED
 
+	UNMUTE(SIDE_A);
+	UNMUTE(SIDE_B);
+	wait(1);
+	UNMUTE(SIDE_A);
+	UNMUTE(SIDE_B);
+	wait(1);
+
+	if(evenCellsFlag) {
+		WRCFGA(sideA_payloadRegisterA_evenCells, SIDE_A);
+		WRCFGA(sideB_payloadRegisterA_evenCells, SIDE_B);
+	}
 
 	balanceCounter = 0;
 	measureCounter = 0;
 	transmitCounter = 0;
 	while(evenCellsFlag) {
-		if(measureCounter > 1000) {
-			if(!refup_check()) {
-				WRCFGA(sideA_payloadRegisterA_evenCells, SIDE_A);
-				WRCFGA(sideB_payloadRegisterA_evenCells, SIDE_B);
-				wait(1);
-			}
+		if(measureCounter > 100) {
 			temperature_sense(moduleTemperatures);
-			voltage_sense(cellVoltages);
-			// read PCB temps too!
+			resistor_temp_sense(pcbTemperatures);
+
+			float maxModuleTemperature = moduleTemperatures[0];
+			for(uint8_t i = 0; i < 18; i++) {
+				if(moduleTemperatures[i] > maxModuleTemperature) {
+					maxModuleTemperature = moduleTemperatures[i];
+				}
+			}
+			if(maxModuleTemperature > 60) {
+				pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
+			}
+			if(maxModuleTemperature > 100) {
+				force_refup();
+				evenCellsFlag = 0;
+			}
+
+			for(uint8_t i = 0; i < THERM_QTY; i++) {
+				if(moduleTemperatures[i] > MAX_TEMPERATURE) {
+					overheatFlag = 1;
+					faultingThermistorIndex = i + 1;
+					faultingTemperature = moduleTemperatures[i];
+				}
+			}
+			if(overheatFlag) { overheats++; }
+
+			else {
+				if(overheats > 0) { overheats--; }
+			}
+			// MODULE OVERHEAT FAULT
+			if(overheats > ATTEMPT_LIMIT) {
+				float tempScale = 1000.0f;
+				uint16_t intFaultingTemperature = (uint16_t)(faultingTemperature * tempScale);
+
+				MUTE(SIDE_A);
+				MUTE(SIDE_B);
+				wait(1);
+				MUTE(SIDE_A);
+				MUTE(SIDE_B);
+
+				error_loop(ERROR_OVERHEAT, intFaultingTemperature, faultingThermistorIndex);
+			}
 
 			measureCounter = 0;
 		}
@@ -288,19 +345,61 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 		wait(1);
 	}
 
+	if(oddCellsFlag) {
+		WRCFGA(sideA_payloadRegisterA_oddCells, SIDE_A);
+		WRCFGA(sideB_payloadRegisterA_oddCells, SIDE_B);
+	}
+
 	balanceCounter = 0;
 	measureCounter = 0;
 	transmitCounter = 0;
 	while(oddCellsFlag) {
-		if(measureCounter > 1000) {
-			if(!refup_check()) {
-				WRCFGA(sideA_payloadRegisterA_oddCells, SIDE_A);
-				WRCFGA(sideB_payloadRegisterA_oddCells, SIDE_B);
-				wait(1);
-			}
+		if(measureCounter > 100) {
 			temperature_sense(moduleTemperatures);
-			voltage_sense(cellVoltages);
-			// read PCB temps too!
+			resistor_temp_sense(pcbTemperatures);
+
+			float maxModuleTemperature = moduleTemperatures[0];
+			for(uint8_t i = 0; i < 18; i++) {
+				if(moduleTemperatures[i] > maxModuleTemperature) {
+					maxModuleTemperature = moduleTemperatures[i];
+				}
+			}
+			if(maxModuleTemperature > 60) {
+				pull_high(GPIOC, GPIO_PIN_7);		// HOT LED
+			}
+			else {
+				pull_low(GPIOC, GPIO_PIN_7);		// HOT LED
+			}
+			if(maxModuleTemperature > 100) {
+				force_refup();
+				oddCellsFlag = 0;
+			}
+
+			for(uint8_t i = 0; i < THERM_QTY; i++) {
+				if(moduleTemperatures[i] > MAX_TEMPERATURE) {
+					overheatFlag = 1;
+					faultingThermistorIndex = i + 1;
+					faultingTemperature = moduleTemperatures[i];
+				}
+			}
+			if(overheatFlag) { overheats++; }
+
+			else {
+				if(overheats > 0) { overheats--; }
+			}
+			// MODULE OVERHEAT FAULT
+			if(overheats > ATTEMPT_LIMIT) {
+				float tempScale = 1000.0f;
+				uint16_t intFaultingTemperature = (uint16_t)(faultingTemperature * tempScale);
+
+				MUTE(SIDE_A);
+				MUTE(SIDE_B);
+				wait(1);
+				MUTE(SIDE_A);
+				MUTE(SIDE_B);
+
+				error_loop(ERROR_OVERHEAT, intFaultingTemperature, faultingThermistorIndex);
+			}
 
 			measureCounter = 0;
 		}
@@ -321,17 +420,40 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 		wait(1);
 	}
 
+	MUTE(SIDE_A);
+	MUTE(SIDE_B);
+	wait(1);
+	MUTE(SIDE_A);
+	MUTE(SIDE_B);
+
+	pull_low(GPIOC, GPIO_PIN_8);	// BALANCE LED
+
 	transientCounter = 0;
 	measureCounter = 0;
 	transmitCounter = 0;
-	while(transientCounter < 30000) {
-		if(measureCounter > 1000) {
-			if(!refup_check()) {
-				force_refup();
-				wait(1);
-			}
+	while(transientCounter < 20000) {
+		if(measureCounter > 100) {
 			temperature_sense(moduleTemperatures);
-			voltage_sense(cellVoltages);
+
+			for(uint8_t i = 0; i < THERM_QTY; i++) {
+				if(moduleTemperatures[i] > MAX_TEMPERATURE) {
+					overheatFlag = 1;
+					faultingThermistorIndex = i + 1;
+					faultingTemperature = moduleTemperatures[i];
+				}
+			}
+			if(overheatFlag) { overheats++; }
+
+			else {
+				if(overheats > 0) { overheats--; }
+			}
+			// MODULE OVERHEAT FAULT
+			if(overheats > ATTEMPT_LIMIT) {
+				float tempScale = 1000.0f;
+				uint16_t intFaultingTemperature = (uint16_t)(faultingTemperature * tempScale);
+
+				error_loop(ERROR_OVERHEAT, intFaultingTemperature, faultingThermistorIndex);
+			}
 
 			measureCounter = 0;
 		}
@@ -432,7 +554,7 @@ void manual_balance(void)
 
 	balanceCounter = 0;
 	while(balanceCounter < 10000) {
-		resistor_temp_sense();
+		//resistor_temp_sense();
 
 		temperature_sense(temperatures);
 

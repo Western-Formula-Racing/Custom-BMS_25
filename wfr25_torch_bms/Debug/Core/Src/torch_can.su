@@ -1,5 +1,9 @@
-../Core/Src/torch_can.c:40:6:can_transmit	48	static
-../Core/Src/torch_can.c:57:6:silent_error_loop	8	static
-../Core/Src/torch_can.c:69:6:error_loop	24	static
-../Core/Src/torch_can.c:126:6:transmit_voltages	56	static
-../Core/Src/torch_can.c:219:6:transmit_temperatures	104	static
+../Core/Src/torch_can.c:8:6:can_transmit	48	static
+../Core/Src/torch_can.c:25:6:silent_error_loop	120	static
+../Core/Src/torch_can.c:62:6:error_loop	136	static
+../Core/Src/torch_can.c:154:6:transmit_balance	32	static
+../Core/Src/torch_can.c:180:6:transmit_balance_initiation	24	static
+../Core/Src/torch_can.c:191:6:transmit_vmin	24	static
+../Core/Src/torch_can.c:214:6:transmit_extract_vmin	16	static
+../Core/Src/torch_can.c:222:6:transmit_voltages	56	static
+../Core/Src/torch_can.c:315:6:transmit_temperatures	104	static

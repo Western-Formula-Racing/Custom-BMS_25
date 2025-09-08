@@ -3,6 +3,52 @@
 
 volatile uint32_t Counter = 0;
 
+
+void low_power_state(void)
+{
+	pull_low(GPIOC, GPIO_PIN_4);		// LTC6820 side A go sleep
+	pull_low(GPIOD, GPIO_PIN_2);		// LTC6820 side B go sleep
+	pull_high(GPIOA, GPIO_PIN_4);		// LTC6820 side A !SS
+	pull_high(GPIOA, GPIO_PIN_15);		// LTC6820 side B !SS
+
+	blink();
+}
+
+
+void blink(void)
+{
+	while(1) {
+		active_led_off();
+		charge_led_off();
+		hot_led_off();
+		balance_led_off();
+		wait(1000);
+		active_led_on();
+		charge_led_on();
+		hot_led_on();
+		balance_led_on();
+		wait(1000);
+	}
+}
+
+
+void fast_blink(void)
+{
+	while(1) {
+		active_led_off();
+		charge_led_off();
+		hot_led_off();
+		balance_led_off();
+		wait(300);
+		active_led_on();
+		charge_led_on();
+		hot_led_on();
+		balance_led_on();
+		wait(300);
+	}
+}
+
+
 void pull_low(GPIO_TypeDef *port, uint16_t pin)
 {
 	HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
@@ -127,7 +173,6 @@ void stop_timer(TIM_HandleTypeDef *htim)
 	}
 
 	else {
-		// STM ERROR (INTERNAL)
 		while(1) {
 			  pull_high(GPIOA, GPIO_PIN_8);
 			  pull_high(GPIOC, GPIO_PIN_9);
@@ -139,7 +184,55 @@ void stop_timer(TIM_HandleTypeDef *htim)
 			  pull_low(GPIOC, GPIO_PIN_8);
 			  pull_low(GPIOC, GPIO_PIN_7);
 			  wait(250);
-			  // ADD CAN MESSAGE SPAM
 		}
 	}
 }
+
+
+void active_led_on(void)
+{
+	pull_high(GPIOA, GPIO_PIN_8);
+}
+
+
+void active_led_off(void)
+{
+	pull_low(GPIOA, GPIO_PIN_8);
+}
+
+
+void charge_led_on(void)
+{
+	pull_high(GPIOC, GPIO_PIN_9);
+}
+
+
+void charge_led_off(void)
+{
+	pull_low(GPIOC, GPIO_PIN_9);
+}
+
+
+void balance_led_on(void)
+{
+	pull_high(GPIOC, GPIO_PIN_8);
+}
+
+
+void balance_led_off(void)
+{
+	pull_low(GPIOC, GPIO_PIN_8);
+}
+
+
+void hot_led_on(void)
+{
+	pull_high(GPIOC, GPIO_PIN_7);
+}
+
+
+void hot_led_off(void)
+{
+	pull_low(GPIOC, GPIO_PIN_7);
+}
+

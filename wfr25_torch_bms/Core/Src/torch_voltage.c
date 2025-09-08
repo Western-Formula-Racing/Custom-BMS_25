@@ -29,11 +29,11 @@ void voltage_sense(uint16_t *cellVoltages)
 	uint8_t sideB_cellVoltageC_PECflag;
 	uint8_t sideB_cellVoltageD_PECflag;
 
-	CLRCELL(SIDE_A);
-	CLRCELL(SIDE_B);
-	wait(3);
-
 	while(attempts < ATTEMPT_LIMIT) {
+		CLRCELL(SIDE_A);
+		CLRCELL(SIDE_B);
+		wait(3);
+
 		ADCV(SIDE_A);
 		ADCV(SIDE_B);
 		wait(3);
@@ -100,9 +100,7 @@ void voltage_sense(uint16_t *cellVoltages)
 			wait(1);
 		}
 	}
-	if(attempts != 13) {
-		error_loop(ERROR_PEC, 0, 0);
-	}
+	if(attempts != 13) { error_loop(ERROR_PEC, 0, 0); }
 
 	*cellVoltages = (sideA_cellVoltageA[1] << 8) | sideA_cellVoltageA[0];
 	*(cellVoltages + 1) = (sideA_cellVoltageA[3] << 8) | sideA_cellVoltageA[2];

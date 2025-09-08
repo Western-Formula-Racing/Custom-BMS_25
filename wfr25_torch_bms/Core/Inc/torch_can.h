@@ -1,34 +1,34 @@
 #ifndef INC_TORCH_CAN_H_
 #define INC_TORCH_CAN_H_
 
-#define CAN_FAULT_ID 1000
-#define CAN_PACK_STAT_ID 1056
-#define CAN_MIN_VCELL_ID 999
-
-// STAT status codes
-#define STAT_DONE_CHARGING 127		// A cell has reached max VCELL, indicating that charging has stopped
-#define STAT_STATS 128				// Sent by M2-M5, picked up by M1. M1 uses this data to determine min VCELL in entire pack
-#define STAT_MIN_VCELL 129			// Sent by M1, picked up by M2-M5. Stores the global min VCELL. All modules will balance with respect to this VCELL
-
 #define ERROR_OVERHEAT 69
 #define ERROR_UNDERVOLT 70
 #define ERROR_OVERVOLT 71
-#define ERROR_IMBALANCE 72
-#define ERROR_CELL_OPEN 73
-#define ERROR_THERMISTOR_OPEN 74
-#define ERROR_DIAGN 75
-#define ERROR_AXST 76
-#define ERROR_CVST 77
-#define ERROR_STATST 78
-#define ERROR_ADOW 79
-#define ERROR_AXOW 80
-#define ERROR_ADOL 81
-#define ERROR_PEC 82
-#define ERROR_CAN_READ 83
+#define ERROR_CELL_OPEN 72
+#define ERROR_THERMISTOR_OPEN 73
+#define ERROR_DIAGN 74
+#define ERROR_MUTE 75
+#define ERROR_CVST 76
+#define ERROR_STATST 77
+#define ERROR_AXST 78
+#define ERROR_ADOL 79
+#define ERROR_OUT_OF_RANGE_VA 80
+#define ERROR_OUT_OF_RANGE_VD 81
+#define ERROR_OUT_OF_RANGE_REF2 82
+#define ERROR_LTC6813_OVERHEAT 83
+#define ERROR_PWM_SETUP 84
+#define ERROR_BALANCE_INITIATION 85
+#define ERROR_PEC 86
+#define ERROR_CAN_READ 87
 
-#define CAN_M1_STAT_ID 1001
+// Balance message IDs
+#define CAN_M1_BALANCE_ID 1001
+#define CAN_M2_BALANCE_ID 1002
+#define CAN_M3_BALANCE_ID 1003
+#define CAN_M4_BALANCE_ID 1004
+#define CAN_M5_BALANCE_ID 1005
 
-// VOLTAGE MESSAGE IDs
+// Voltage message IDs
 #define CAN_M1_V1_ID 1006
 #define CAN_M1_V2_ID 1007
 #define CAN_M1_V3_ID 1008
@@ -90,7 +90,22 @@
 #define CAN_M5_T4_ID 1054
 #define CAN_M5_T5_ID 1055
 
+// FORCE BALANCE MESSAGE IDs
+#define CAN_EXTRACT_VMIN_ID 69
+#define CAN_M2_VMIN_ID 70
+#define CAN_M3_VMIN_ID 71
+#define CAN_M4_VMIN_ID 72
+#define CAN_M5_VMIN_ID 73
+
 void can_transmit(uint16_t canMsgID, uint8_t *payload);
+
+void transmit_balance(uint8_t *balanceMsg);
+
+void transmit_balance_initiation(uint16_t absMinCellVoltage);
+
+void transmit_extract_vmin(void);
+
+void transmit_vmin(uint16_t minCellVoltage);
 
 void transmit_voltages(uint16_t *cellVoltages);
 

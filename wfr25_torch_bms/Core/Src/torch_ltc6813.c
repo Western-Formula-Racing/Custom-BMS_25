@@ -65,16 +65,16 @@ void action_cmd(uint8_t *cmd_ptr, uint8_t sideA)
 {
 	// TO LTC SIDE A (CELL 1 to 10)
 	if (sideA) {
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 		HAL_SPI_Transmit(&hspi1, cmd_ptr, CMD_LEN, HAL_MAX_DELAY);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 	}
 
 	// TO LTC SIDE B (CELL 11 to 20)
 	else {
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
 		HAL_SPI_Transmit(&hspi3, cmd_ptr, CMD_LEN, HAL_MAX_DELAY);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
 	}
 }
 
@@ -83,18 +83,18 @@ void write_cmd(uint8_t *cmd_ptr, uint8_t *payload_ptr, uint8_t sideA)
 {
 	// TO LTC SIDE A (CELL 1 to 10)
 	if (sideA) {
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 		HAL_SPI_Transmit(&hspi1, cmd_ptr, CMD_LEN, HAL_MAX_DELAY);
 		HAL_SPI_Transmit(&hspi1, payload_ptr, PAYLOAD_LEN, HAL_MAX_DELAY);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 	}
 
 	// TO LTC SIDE B (CELL 11 to 20)
 	else {
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
 		HAL_SPI_Transmit(&hspi3, cmd_ptr, CMD_LEN, HAL_MAX_DELAY);
 		HAL_SPI_Transmit(&hspi3, payload_ptr, PAYLOAD_LEN, HAL_MAX_DELAY);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
 	}
 }
 
@@ -104,18 +104,18 @@ void read_cmd(uint8_t *cmd_ptr, uint8_t *receivedPayload_ptr, uint8_t sideA)
 
 	// TO LTC SIDE A (CELL 1 to 10)
 	if (sideA) {
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 		HAL_SPI_Transmit(&hspi1, cmd_ptr, CMD_LEN, HAL_MAX_DELAY);
 		HAL_SPI_TransmitReceive(&hspi1, dummies, receivedPayload_ptr, PAYLOAD_LEN, HAL_MAX_DELAY);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 	}
 
 	// TO LTC SIDE B (CELL 11 to 20)
 	else {
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
 		HAL_SPI_Transmit(&hspi3, cmd_ptr, CMD_LEN, HAL_MAX_DELAY);
 		HAL_SPI_TransmitReceive(&hspi3, dummies, receivedPayload_ptr, PAYLOAD_LEN, HAL_MAX_DELAY);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);		// MAKE THIS GENERIC
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET);
 	}
 }
 
@@ -510,15 +510,29 @@ void ADOW(uint8_t variant, uint8_t side)
 	uint8_t cmd[4];
 	uint16_t cmd_PEC;
 
-	if (variant) {
+	if(variant) {			// PUP = 0
 		cmd[0] = 0x03;
-		cmd[1] = 0x28;
+		cmd[1] = 0x38;
 	}
-	else {
+	else {					// PUP = 1
 		cmd[0] = 0x03;
-		cmd[1] = 0x68;
+		cmd[1] = 0x78;
 	}
 
+	cmd_PEC = compute_PEC15(cmd, 2);
+	append_PEC(cmd, 2, cmd_PEC);
+
+	action_cmd(cmd, side);
+}
+
+
+void ADOL(uint8_t side)
+{
+	uint8_t cmd[4];
+	uint16_t cmd_PEC;
+
+	cmd[0] = 0x03;
+	cmd[1] = 0x01;
 	cmd_PEC = compute_PEC15(cmd, 2);
 	append_PEC(cmd, 2, cmd_PEC);
 
@@ -531,12 +545,33 @@ void CVST(uint8_t variant, uint8_t side)
 	uint8_t cmd[4];
 	uint16_t cmd_PEC;
 
-	if (variant) {
+	if(variant) {
 		cmd[0] = 0x03;
 		cmd[1] = 0x27;
 	}
 	else {
 		cmd[0] = 0x03;
+		cmd[1] = 0x47;
+	}
+
+	cmd_PEC = compute_PEC15(cmd, 2);
+	append_PEC(cmd, 2, cmd_PEC);
+
+	action_cmd(cmd, side);
+}
+
+
+void AXST(uint8_t variant, uint8_t side)
+{
+	uint8_t cmd[4];
+	uint16_t cmd_PEC;
+
+	if(variant) {
+		cmd[0] = 0x05;
+		cmd[1] = 0x27;
+	}
+	else {
+		cmd[0] = 0x05;
 		cmd[1] = 0x47;
 	}
 
@@ -568,13 +603,13 @@ void STATST(uint8_t variant, uint8_t side)
 }
 
 
-void ADSTAT(uint8_t side)
+void ADSTATD(uint8_t side)
 {
 	uint8_t cmd[4];
 	uint16_t cmd_PEC;
 
 	cmd[0] = 0x05;
-	cmd[1] = 0x68;
+	cmd[1] = 0x08;
 	cmd_PEC = compute_PEC15(cmd, 2);
 	append_PEC(cmd, 2, cmd_PEC);
 
@@ -748,18 +783,122 @@ uint8_t refup_check(void)
 		sideA_refonBit = (sideA_configRegisterA[0] >> 2) & 0x01;
 		sideB_refonBit = (sideB_configRegisterA[0] >> 2) & 0x01;
 
-		if(sideA_configRegisterA_PECflag == 2 && sideB_configRegisterA_PECflag == 2) {
-			attempts = 13;
-		}
+		if(sideA_configRegisterA_PECflag == 2 && sideB_configRegisterA_PECflag == 2) { attempts = 13; }
+
 		else {
 			attempts++;
 			wait(1);
 		}
 	}
-	if(attempts != 13) {
-		error_loop(ERROR_PEC, 0, 0);
-	}
+	if(attempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+
 	if(sideA_refonBit == 1 && sideB_refonBit == 1) { return 1; }
 
 	else { return 0; }
+}
+
+
+void force_mute(void)
+{
+	uint8_t attempts = 0;
+	uint8_t subAttempts = 0;
+
+	uint8_t sideA_receivedRegisterB[8];
+	uint8_t sideB_receivedRegisterB[8];
+
+	uint8_t sideA_registerB_PECflag = 0;
+	uint8_t sideB_registerB_PECflag = 0;
+
+	uint8_t sideA_muteBit;
+	uint8_t sideB_muteBit;
+
+	while(attempts < ATTEMPT_LIMIT) {
+		while(subAttempts < ATTEMPT_LIMIT) {
+			MUTE(SIDE_A);
+			MUTE(SIDE_B);
+			wait(1);
+			MUTE(SIDE_A);
+			MUTE(SIDE_B);
+			wait(1);
+
+			RDCFGB(sideA_receivedRegisterB, SIDE_A);
+			RDCFGB(sideB_receivedRegisterB, SIDE_B);
+
+			sideA_registerB_PECflag = verify_PEC15(sideA_receivedRegisterB);
+			sideB_registerB_PECflag = verify_PEC15(sideB_receivedRegisterB);
+
+			if(sideA_registerB_PECflag == 2 && sideB_registerB_PECflag == 2) { subAttempts = 13; }
+
+			else {
+				subAttempts++;
+				wait(1);
+			}
+		}
+		if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+
+		sideA_muteBit = (sideA_receivedRegisterB[1] >> 7) & 0x01;
+		sideB_muteBit = (sideB_receivedRegisterB[1] >> 7) & 0x01;
+
+		if(sideA_muteBit == 1 && sideB_muteBit == 1) { attempts = 13; }
+
+		else {
+			attempts++;
+			subAttempts = 0;
+			wait(1);
+		}
+	}
+	if(attempts != 13) { error_loop(ERROR_MUTE, 0, 0); }
+}
+
+
+void force_unmute(void)
+{
+	uint8_t attempts = 0;
+	uint8_t subAttempts = 0;
+
+	uint8_t sideA_receivedRegisterB[8];
+	uint8_t sideB_receivedRegisterB[8];
+
+	uint8_t sideA_registerB_PECflag = 0;
+	uint8_t sideB_registerB_PECflag = 0;
+
+	uint8_t sideA_muteBit;
+	uint8_t sideB_muteBit;
+
+	while(attempts < ATTEMPT_LIMIT) {
+		while(subAttempts < ATTEMPT_LIMIT) {
+			UNMUTE(SIDE_A);
+			UNMUTE(SIDE_B);
+			wait(1);
+			UNMUTE(SIDE_A);
+			UNMUTE(SIDE_B);
+			wait(1);
+
+			RDCFGB(sideA_receivedRegisterB, SIDE_A);
+			RDCFGB(sideB_receivedRegisterB, SIDE_B);
+
+			sideA_registerB_PECflag = verify_PEC15(sideA_receivedRegisterB);
+			sideB_registerB_PECflag = verify_PEC15(sideB_receivedRegisterB);
+
+			if(sideA_registerB_PECflag == 2 && sideB_registerB_PECflag == 2) { subAttempts = 13; }
+
+			else {
+				subAttempts++;
+				wait(1);
+			}
+		}
+		if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+
+		sideA_muteBit = (sideA_receivedRegisterB[1] >> 7) & 0x01;
+		sideB_muteBit = (sideB_receivedRegisterB[1] >> 7) & 0x01;
+
+		if(sideA_muteBit == 0 && sideB_muteBit == 0) { attempts = 13; }
+
+		else {
+			attempts++;
+			subAttempts = 0;
+			wait(1);
+		}
+	}
+	if(attempts != 13) { error_loop(ERROR_MUTE, 0, 0); }
 }

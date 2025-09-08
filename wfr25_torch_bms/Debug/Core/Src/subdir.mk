@@ -13,8 +13,10 @@ C_SRCS += \
 ../Core/Src/system_stm32f4xx.c \
 ../Core/Src/torch_balance.c \
 ../Core/Src/torch_can.c \
+../Core/Src/torch_diagnostic.c \
 ../Core/Src/torch_ltc6813.c \
 ../Core/Src/torch_main.c \
+../Core/Src/torch_states.c \
 ../Core/Src/torch_stm32.c \
 ../Core/Src/torch_temperature.c \
 ../Core/Src/torch_voltage.c 
@@ -28,8 +30,10 @@ OBJS += \
 ./Core/Src/system_stm32f4xx.o \
 ./Core/Src/torch_balance.o \
 ./Core/Src/torch_can.o \
+./Core/Src/torch_diagnostic.o \
 ./Core/Src/torch_ltc6813.o \
 ./Core/Src/torch_main.o \
+./Core/Src/torch_states.o \
 ./Core/Src/torch_stm32.o \
 ./Core/Src/torch_temperature.o \
 ./Core/Src/torch_voltage.o 
@@ -43,8 +47,10 @@ C_DEPS += \
 ./Core/Src/system_stm32f4xx.d \
 ./Core/Src/torch_balance.d \
 ./Core/Src/torch_can.d \
+./Core/Src/torch_diagnostic.d \
 ./Core/Src/torch_ltc6813.d \
 ./Core/Src/torch_main.d \
+./Core/Src/torch_states.d \
 ./Core/Src/torch_stm32.d \
 ./Core/Src/torch_temperature.d \
 ./Core/Src/torch_voltage.d 
@@ -57,7 +63,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/stm32f4xx_hal_msp.cyclo ./Core/Src/stm32f4xx_hal_msp.d ./Core/Src/stm32f4xx_hal_msp.o ./Core/Src/stm32f4xx_hal_msp.su ./Core/Src/stm32f4xx_it.cyclo ./Core/Src/stm32f4xx_it.d ./Core/Src/stm32f4xx_it.o ./Core/Src/stm32f4xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32f4xx.cyclo ./Core/Src/system_stm32f4xx.d ./Core/Src/system_stm32f4xx.o ./Core/Src/system_stm32f4xx.su ./Core/Src/torch_balance.cyclo ./Core/Src/torch_balance.d ./Core/Src/torch_balance.o ./Core/Src/torch_balance.su ./Core/Src/torch_can.cyclo ./Core/Src/torch_can.d ./Core/Src/torch_can.o ./Core/Src/torch_can.su ./Core/Src/torch_ltc6813.cyclo ./Core/Src/torch_ltc6813.d ./Core/Src/torch_ltc6813.o ./Core/Src/torch_ltc6813.su ./Core/Src/torch_main.cyclo ./Core/Src/torch_main.d ./Core/Src/torch_main.o ./Core/Src/torch_main.su ./Core/Src/torch_stm32.cyclo ./Core/Src/torch_stm32.d ./Core/Src/torch_stm32.o ./Core/Src/torch_stm32.su ./Core/Src/torch_temperature.cyclo ./Core/Src/torch_temperature.d ./Core/Src/torch_temperature.o ./Core/Src/torch_temperature.su ./Core/Src/torch_voltage.cyclo ./Core/Src/torch_voltage.d ./Core/Src/torch_voltage.o ./Core/Src/torch_voltage.su
+	-$(RM) ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/stm32f4xx_hal_msp.cyclo ./Core/Src/stm32f4xx_hal_msp.d ./Core/Src/stm32f4xx_hal_msp.o ./Core/Src/stm32f4xx_hal_msp.su ./Core/Src/stm32f4xx_it.cyclo ./Core/Src/stm32f4xx_it.d ./Core/Src/stm32f4xx_it.o ./Core/Src/stm32f4xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32f4xx.cyclo ./Core/Src/system_stm32f4xx.d ./Core/Src/system_stm32f4xx.o ./Core/Src/system_stm32f4xx.su ./Core/Src/torch_balance.cyclo ./Core/Src/torch_balance.d ./Core/Src/torch_balance.o ./Core/Src/torch_balance.su ./Core/Src/torch_can.cyclo ./Core/Src/torch_can.d ./Core/Src/torch_can.o ./Core/Src/torch_can.su ./Core/Src/torch_diagnostic.cyclo ./Core/Src/torch_diagnostic.d ./Core/Src/torch_diagnostic.o ./Core/Src/torch_diagnostic.su ./Core/Src/torch_ltc6813.cyclo ./Core/Src/torch_ltc6813.d ./Core/Src/torch_ltc6813.o ./Core/Src/torch_ltc6813.su ./Core/Src/torch_main.cyclo ./Core/Src/torch_main.d ./Core/Src/torch_main.o ./Core/Src/torch_main.su ./Core/Src/torch_states.cyclo ./Core/Src/torch_states.d ./Core/Src/torch_states.o ./Core/Src/torch_states.su ./Core/Src/torch_stm32.cyclo ./Core/Src/torch_stm32.d ./Core/Src/torch_stm32.o ./Core/Src/torch_stm32.su ./Core/Src/torch_temperature.cyclo ./Core/Src/torch_temperature.d ./Core/Src/torch_temperature.o ./Core/Src/torch_temperature.su ./Core/Src/torch_voltage.cyclo ./Core/Src/torch_voltage.d ./Core/Src/torch_voltage.o ./Core/Src/torch_voltage.su
 
 .PHONY: clean-Core-2f-Src
 

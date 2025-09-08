@@ -2,39 +2,7 @@
 #include "torch_can.h"
 #include "torch_main.h"
 #include "torch_stm32.h"
-
-/*
-void can_transmit(uint16_t canMsgID, uint8_t *payload)
-{
-	uint8_t attempts = 0;
-	HAL_StatusTypeDef status;
-
-	CAN_TxHeaderTypeDef TxHeader;
-	uint32_t TxMailbox;
-
-	TxHeader.DLC = 8;
-	TxHeader.ExtId = 0;
-	TxHeader.IDE = CAN_ID_STD;
-	TxHeader.RTR = CAN_RTR_DATA;
-	TxHeader.StdId = canMsgID;
-	TxHeader.TransmitGlobalTime = DISABLE;
-
-	while(attempts < ATTEMPT_LIMIT) {
-		status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader, payload, &TxMailbox);
-
-		if(status == HAL_OK) {
-			attempts = 13;
-		}
-		else {
-			attempts++;
-			wait(5);
-		}
-	}
-	if(attempts != 13) {
-		silent_error_loop();
-	}
-
-}*/
+#include "torch_config.h"
 
 
 void can_transmit(uint16_t canMsgID, uint8_t *payload)
@@ -88,11 +56,6 @@ void silent_error_loop(void)
 
 		wait(1);
 	}
-	/*
-	while(1) {
-		wait(10);
-	}
-	*/
 }
 
 
@@ -112,6 +75,15 @@ void error_loop(uint8_t errorCode, uint16_t faultValue, uint8_t faultIndex)
 
 			msgFault[5] = (uint8_t)(faultValue & 0xFF);
 			msgFault[6] = (uint8_t)((faultValue >> 8) & 0xFF);
+			msgFault[7] = faultIndex;
+			break;
+		case ERROR_THERMISTOR_OPEN:
+			msgFault[2] = 0;
+			msgFault[3] = 0;
+			msgFault[4] = 0;
+
+			msgFault[5] = 0;
+			msgFault[6] = 0;
 			msgFault[7] = faultIndex;
 			break;
 		case ERROR_UNDERVOLT:
@@ -143,8 +115,10 @@ void error_loop(uint8_t errorCode, uint16_t faultValue, uint8_t faultIndex)
 			msgFault[7] = 0;
 			break;
 	}
-	pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
-	pull_high(GPIOC, GPIO_PIN_9);		// CHARGE LED
+	active_led_on();
+	charge_led_on();
+	balance_led_off();
+	hot_led_off();
 
 	uint16_t cellVoltages[CELL_QTY];
 	float temperatures[THERM_QTY];
@@ -174,12 +148,74 @@ void error_loop(uint8_t errorCode, uint16_t faultValue, uint8_t faultIndex)
 
 		wait(1);
 	}
-	/*
-	while(1) {
-		can_transmit(CAN_FAULT_ID, msgFault);
-		wait(1000);
+}
+
+
+void transmit_balance(uint8_t *balanceMsg)
+{
+	uint8_t payload[8] = {0};
+
+	for(uint8_t i = 0; i < 8; i++) { payload[i] = *(balanceMsg + i); }
+
+	switch(moduleID) {
+		case 1:
+			can_transmit(CAN_M1_BALANCE_ID, payload);
+			break;
+		case 2:
+			can_transmit(CAN_M2_BALANCE_ID, payload);
+			break;
+		case 3:
+			can_transmit(CAN_M3_BALANCE_ID, payload);
+			break;
+		case 4:
+			can_transmit(CAN_M4_BALANCE_ID, payload);
+			break;
+		case 5:
+			can_transmit(CAN_M5_BALANCE_ID, payload);
+			break;
 	}
-	*/
+}
+
+
+void transmit_balance_initiation(uint16_t absMinCellVoltage)
+{
+	uint8_t payload[8] = {0};
+
+	payload[0] = (uint8_t)(absMinCellVoltage & 0xFF);
+	payload[1] = (uint8_t)((absMinCellVoltage >> 8) & 0xFF);
+
+	can_transmit(CAN_MIN_VCELL_ID, payload);
+}
+
+
+void transmit_vmin(uint16_t minCellVoltage)
+{
+	uint8_t payload[8] = {0};
+
+	payload[0] = (uint8_t)(minCellVoltage & 0xFF);
+	payload[1] = (uint8_t)((minCellVoltage >> 8) & 0xFF);
+
+	switch(moduleID) {
+		case 2:
+			can_transmit(CAN_M2_VMIN_ID, payload);
+			break;
+		case 3:
+			can_transmit(CAN_M3_VMIN_ID, payload);
+			break;
+		case 4:
+			can_transmit(CAN_M4_VMIN_ID, payload);
+			break;
+		case 5:
+			can_transmit(CAN_M5_VMIN_ID, payload);
+			break;
+	}
+}
+
+void transmit_extract_vmin(void)
+{
+	uint8_t zeroPayload[8] = {0};
+
+	can_transmit(CAN_EXTRACT_VMIN_ID, zeroPayload);
 }
 
 

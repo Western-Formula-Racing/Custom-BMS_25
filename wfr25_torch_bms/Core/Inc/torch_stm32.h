@@ -10,6 +10,12 @@ extern TIM_HandleTypeDef htim2;
 
 extern volatile uint32_t Counter;
 
+void low_power_state(void);
+
+void blink(void);
+
+void fast_blink(void);
+
 void pull_low(GPIO_TypeDef *port,		// GPIO port letter
 			  uint16_t pin				// GPIO port number
 			  );
@@ -31,8 +37,23 @@ uint8_t SPI_receive(SPI_HandleTypeDef *hspi,			// SPI peripheral (hspi1-3 for TO
 				    );
 
 void start_timer(TIM_HandleTypeDef *htim);			// Timer peripheral (htim2 for TORCH 2025)
+
 void stop_timer(TIM_HandleTypeDef *htim);			// Timer peripheral (htim2 for TORCH 2025)
 
-// TO ADD: ADC (DIFFERS FROM PROTOTYPE B) & CAN
+void active_led_on(void);
+
+void active_led_off(void);
+
+void charge_led_on(void);
+
+void charge_led_off(void);
+
+void balance_led_on(void);
+
+void balance_led_off(void);
+
+void hot_led_on(void);
+
+void hot_led_off(void);
 
 #endif

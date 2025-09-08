@@ -99,11 +99,15 @@ void CLRSCTRL(uint8_t side);
 
 void ADOW(uint8_t variant, uint8_t side);
 
+void ADOL(uint8_t side);
+
 void CVST(uint8_t variant, uint8_t side);
+
+void AXST(uint8_t variant, uint8_t side);
 
 void STATST(uint8_t variant, uint8_t side);
 
-void ADSTAT(uint8_t side);
+void ADSTATD(uint8_t side);
 
 void ADAXD(uint8_t side);
 
@@ -125,5 +129,9 @@ void UNMUTE(uint8_t side);
 void force_refup(void);
 
 uint8_t refup_check(void);
+
+void force_mute(void);
+
+void force_unmute(void);
 
 #endif

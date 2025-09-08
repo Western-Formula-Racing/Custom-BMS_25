@@ -1,8 +1,7 @@
-../Core/Src/torch_balance.c:9:6:resistor_temp_sense	8
-../Core/Src/torch_balance.c:87:9:cell_sorter	8
-../Core/Src/torch_balance.c:124:6:balance_loop	28
-../Core/Src/torch_balance.c:306:6:config_DCC_bits	12
-../Core/Src/torch_balance.c:358:6:manual_balance	4
-../Core/Src/torch_balance.c:404:6:manual_emergency_mute	1
-../Core/Src/torch_balance.c:420:6:manual_overheat_recover	1
-../Core/Src/torch_balance.c:429:6:force_balance	22
+../Core/Src/torch_balance.c:12:6:resistor_temperature_sense	33
+../Core/Src/torch_balance.c:146:9:balance_check	6
+../Core/Src/torch_balance.c:172:6:extract_min_cell_voltage	20
+../Core/Src/torch_balance.c:266:6:balance_cycle	103
+../Core/Src/torch_balance.c:892:6:config_balance_flags	22
+../Core/Src/torch_balance.c:985:6:config_DCC_bits	12
+../Core/Src/torch_balance.c:1039:6:config_PWM_bits	145

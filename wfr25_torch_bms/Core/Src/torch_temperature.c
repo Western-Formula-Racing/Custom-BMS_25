@@ -88,9 +88,6 @@ void read_thermistors(float *thermistorArray_ptr)
 	float thermistorVoltage[18];
 	uint16_t ADCSum;
 
-	//HAL_ADC_Start(&hadc1);
-	// ADD MUX ENABLE ON FINAL BOARD
-
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);

@@ -24,6 +24,7 @@
 #include "torch_main.h"
 #include "torch_stm32.h"
 #include "torch_can.h"
+#include "torch_config.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,7 +63,7 @@ static void MX_SPI1_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM2_Init(void);
-void MX_CAN1_Init(uint8_t mode);
+static void MX_CAN1_Init(uint8_t moduleID);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -105,7 +106,7 @@ int main(void)
   MX_SPI3_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
-  MX_CAN1_Init(1);
+  MX_CAN1_Init(moduleID);
   /* USER CODE BEGIN 2 */
   torch_main();
   /* USER CODE END 2 */
@@ -225,7 +226,7 @@ static void MX_ADC1_Init(void)
   * @param None
   * @retval None
   */
-void MX_CAN1_Init(uint8_t mode)
+void MX_CAN1_Init(uint8_t moduleID)
 {
 
   /* USER CODE BEGIN CAN1_Init 0 */
@@ -233,11 +234,11 @@ void MX_CAN1_Init(uint8_t mode)
   /* USER CODE END CAN1_Init 0 */
 
   /* USER CODE BEGIN CAN1_Init 1 */
-  if(mode == 1) { hcan1.Init.Prescaler = 3; }	// 500 kHz
-  else { hcan1.Init.Prescaler = 6; }			// 250 kHz
+
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
+  hcan1.Init.Prescaler = 3;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
   hcan1.Init.TimeSeg1 = CAN_BS1_11TQ;
   hcan1.Init.TimeSeg2 = CAN_BS2_4TQ;
@@ -274,6 +275,33 @@ void MX_CAN1_Init(uint8_t mode)
   canFilter.FilterFIFOAssignment = CAN_RX_FIFO1;
   canFilter.FilterIdHigh = CAN_PACK_STAT_ID << 5;
   HAL_CAN_ConfigFilter(&hcan1, &canFilter);
+
+  switch(moduleID) {
+  	  case 1:
+  		  canFilter.FilterBank = 4;
+  		  canFilter.FilterFIFOAssignment = CAN_RX_FIFO0;
+  		  canFilter.FilterIdHigh = CAN_M2_VMIN_ID << 5;
+  		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
+
+  		  canFilter.FilterBank = 5;
+  		  canFilter.FilterIdHigh = CAN_M3_VMIN_ID << 5;
+  		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
+
+  		  canFilter.FilterBank = 6;
+  		  canFilter.FilterIdHigh = CAN_M4_VMIN_ID << 5;
+  		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
+
+  		  canFilter.FilterBank = 7;
+  		  canFilter.FilterIdHigh = CAN_M5_VMIN_ID << 5;
+  		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
+  		  break;
+  	  default:
+  		  canFilter.FilterBank = 4;
+  		  canFilter.FilterFIFOAssignment = CAN_RX_FIFO0;
+  		  canFilter.FilterIdHigh = CAN_EXTRACT_VMIN_ID << 5;
+  		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
+  		  break;
+  }
 
   /* USER CODE END CAN1_Init 2 */
 

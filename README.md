@@ -1,2 +1,2 @@
-# 2025-2026 Custom BMS
-This repository contains Western Formula Racing's first successful custom BMS project. This BMS was designed and implemented in 2025 and is planned to be carried over to the 2026 vehicle. The folder 'wfr25_torch_bms' contains the STM32 Cube IDE project; this is the program that is running on the BMS STM32 microcontrollers. The 'Resources' folder contains documentation explaining the BMS topology, how it works under the hood, as well as how to maintain it.
+# 2025 Custom BMS
+This repository contains Western Formula Racing's first successful custom BMS project, designed and implemented in 2025. The folder 'wfr25_torch_bms' contains the STM32 Cube IDE project; this is the program that is running on the BMS STM32 microcontrollers. Simply open the project folder in Cube IDE to load it onto the BMS. The 'Resources' folder contains documentation explaining the BMS topology, how it works under the hood, as well as how to maintain it.

@@ -1,6 +1,7 @@
 #include "main.h"
 #include "torch_main.h"
 #include "torch_stm32.h"
+#include "torch_ltc6813.h"
 #include "torch_voltage.h"
 #include "torch_can.h"
 
@@ -100,7 +101,7 @@ void voltage_sense(uint16_t *cellVoltages)
 			wait(1);
 		}
 	}
-	if(attempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+	//if(attempts != 13) { error_loop(ERROR_PEC, 0, 0); }
 
 	*cellVoltages = (sideA_cellVoltageA[1] << 8) | sideA_cellVoltageA[0];
 	*(cellVoltages + 1) = (sideA_cellVoltageA[3] << 8) | sideA_cellVoltageA[2];

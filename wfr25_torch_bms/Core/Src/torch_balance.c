@@ -1,17 +1,19 @@
 #include "main.h"
 #include "torch_main.h"
 #include "torch_stm32.h"
-#include "torch_balance.h"
+#include "torch_diagnostic.h"
 #include "torch_ltc6813.h"
 #include "torch_temperature.h"
 #include "torch_can.h"
-#include "torch_config.h"
+#include "torch_dependencies.h"
+#include "torch_balance.h"
 #include <math.h>
 
 
 void resistor_temperature_sense(float *pcbTemperatures)
 {
-	uint8_t attempts = 0;
+	uint8_t sideA_attempts = 0;
+	uint8_t sideB_attempts = 0;
 
 	uint8_t sideA_auxRegisterA[8];
 	uint8_t sideA_auxRegisterB[8];
@@ -42,7 +44,7 @@ void resistor_temperature_sense(float *pcbTemperatures)
 	float sideA_temperatures[9];
 	float sideB_temperatures[9];
 
-	while(attempts < ATTEMPT_LIMIT) {
+	while(sideA_attempts < ATTEMPT_LIMIT || sideB_attempts < ATTEMPT_LIMIT) {
 		CLRAUX(SIDE_A);
 		CLRAUX(SIDE_B);
 		wait(3);
@@ -77,10 +79,6 @@ void resistor_temperature_sense(float *pcbTemperatures)
 		   sideA_auxRegisterB_PECflag == 2 &&
 		   sideA_auxRegisterC_PECflag == 2 &&
 		   sideA_auxRegisterD_PECflag == 2 &&
-		   sideB_auxRegisterA_PECflag == 2 &&
-		   sideB_auxRegisterB_PECflag == 2 &&
-		   sideB_auxRegisterC_PECflag == 2 &&
-		   sideB_auxRegisterD_PECflag == 2 &&
 		   sideA_auxRegisterA[1] != 0xFF &&
 		   sideA_auxRegisterA[3] != 0xFF &&
 		   sideA_auxRegisterA[5] != 0xFF &&
@@ -90,7 +88,19 @@ void resistor_temperature_sense(float *pcbTemperatures)
 		   sideA_auxRegisterC[1] != 0xFF &&
 		   sideA_auxRegisterC[3] != 0xFF &&
 		   sideA_auxRegisterC[5] != 0xFF &&
-		   sideA_auxRegisterD[1] != 0xFF &&
+		   sideA_auxRegisterD[1] != 0xFF)
+		{
+			sideA_attempts = 13;
+		}
+		else {
+			sideA_attempts++;
+			wait(1);
+		}
+
+		if(sideB_auxRegisterA_PECflag == 2 &&
+		   sideB_auxRegisterB_PECflag == 2 &&
+		   sideB_auxRegisterC_PECflag == 2 &&
+		   sideB_auxRegisterD_PECflag == 2 &&
 		   sideB_auxRegisterA[1] != 0xFF &&
 		   sideB_auxRegisterA[3] != 0xFF &&
 		   sideB_auxRegisterA[5] != 0xFF &&
@@ -102,14 +112,16 @@ void resistor_temperature_sense(float *pcbTemperatures)
 		   sideB_auxRegisterC[5] != 0xFF &&
 		   sideB_auxRegisterD[1] != 0xFF)
 		{
-			attempts = 13;
+			sideB_attempts = 13;
 		}
 		else {
-			attempts++;
+			sideB_attempts++;
 			wait(1);
 		}
 	}
-	if(attempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+	if(sideA_attempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_A); }
+
+	if(sideB_attempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_B); }
 
 	sideA_boardThermistorVoltages[0] = ((sideA_auxRegisterA[1] << 8) | sideA_auxRegisterA[0]) / 10000.0f;
 	sideA_boardThermistorVoltages[1] = ((sideA_auxRegisterA[3] << 8) | sideA_auxRegisterA[2]) / 10000.0f;
@@ -185,7 +197,7 @@ void extract_min_cell_voltage(uint16_t *absMinCellVoltage)
 	transmitCounter = 0;
 	measureCounter = 0;
 	while(!minCellVoltageReceptionFlag) {
-		if(measureCounter > 100) {
+		if(measureCounter > MEASURE_INTERVAL) {
 			if(!refup_check()) {
 				force_refup();
 				wait(1);
@@ -239,7 +251,7 @@ void extract_min_cell_voltage(uint16_t *absMinCellVoltage)
 				}
 			}
 			// If the STM32 fails to read the CAN message 10 times in a row, fault!
-			if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0); }
+			if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0, MCU_FAULT); }
 		}
 
 		minCellVoltageReceptionFlag = 1;
@@ -263,7 +275,7 @@ void extract_min_cell_voltage(uint16_t *absMinCellVoltage)
 }
 
 
-void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t absMinCellVoltage)
+void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t absMinCellVoltage, uint8_t *haltBalanceFlag)
 {
 	CAN_RxHeaderTypeDef RxHeader;
 	uint8_t RxData[8];
@@ -380,8 +392,8 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 	uint8_t overheatFlag = 0;
 	uint8_t overheatCount = 0;
 
-	uint8_t faultingThermistorIndex;
-	float faultingTemperature;
+	uint8_t faultThermistorQty = 0;
+	uint8_t faultThermistors[MODULE_THERM_QTY] = {0};
 
 	uint8_t sideA_payloadRegisterA_evenCells[8];
 	uint8_t sideB_payloadRegisterA_evenCells[8];
@@ -448,8 +460,10 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 	wait(1);
 
 	if(evenCellsFlag) {
-		uint8_t attempts = 0;
-		uint8_t subAttempts = 0;
+		uint8_t sideA_attempts = 0;
+		uint8_t sideB_attempts = 0;
+		uint8_t sideA_subAttempts = 0;
+		uint8_t sideB_subAttempts = 0;
 
 		uint8_t sideA_receptionRegisterPWM[8];
 		uint8_t sideB_receptionRegisterPWM[8];
@@ -457,8 +471,8 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 		uint8_t sideA_receptionRegisterPWM_PECflag;
 		uint8_t sideB_receptionRegisterPWM_PECflag;
 
-		while(attempts < ATTEMPT_LIMIT) {
-			while(subAttempts < ATTEMPT_LIMIT) {
+		while(sideA_attempts < ATTEMPT_LIMIT || sideB_attempts < ATTEMPT_LIMIT) {
+			while(sideA_subAttempts < ATTEMPT_LIMIT || sideB_subAttempts < ATTEMPT_LIMIT) {
 				WRPWM(sideA_payloadRegisterPWM_evenCells, SIDE_A);
 				WRPWM(sideB_payloadRegisterPWM_evenCells, SIDE_B);
 				wait(1);
@@ -470,34 +484,60 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 				sideA_receptionRegisterPWM_PECflag = verify_PEC15(sideA_receptionRegisterPWM);
 				sideB_receptionRegisterPWM_PECflag = verify_PEC15(sideB_receptionRegisterPWM);
 
-				if(sideA_receptionRegisterPWM_PECflag == 2 &&
-				   sideB_receptionRegisterPWM_PECflag == 2)
-				{
-					subAttempts = 13;
-				}
+				if(sideA_receptionRegisterPWM_PECflag == 2) { sideA_subAttempts = 13; }
+
 				else {
-					subAttempts++;
+					sideA_subAttempts++;
+					wait(1);
+				}
+
+				if(sideB_receptionRegisterPWM_PECflag == 2) { sideB_subAttempts = 13; }
+
+				else {
+					sideB_subAttempts++;
 					wait(1);
 				}
 			}
-			if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+			if(sideA_subAttempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_A); }
 
-			uint8_t matchFlag = 1;
+			if(sideB_subAttempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_B); }
+
+			uint8_t sideA_matchFlag = 1;
+			uint8_t sideB_matchFlag = 1;
 
 			for(uint8_t i = 0; i < 6; i++) {
-				if(sideA_receptionRegisterPWM[i] != sideA_payloadRegisterPWM_evenCells[i] || sideB_receptionRegisterPWM[i] != sideB_payloadRegisterPWM_evenCells[i]) {
-					matchFlag = 0;
+				if(sideA_receptionRegisterPWM[i] != sideA_payloadRegisterPWM_evenCells[i]) {
+					sideA_matchFlag = 0;
 				}
 			}
-			if(matchFlag) { attempts = 13; }
+
+			for(uint8_t i = 0; i < 6; i++) {
+				if(sideB_receptionRegisterPWM[i] != sideB_payloadRegisterPWM_evenCells[i]) {
+					sideB_matchFlag = 0;
+				}
+			}
+
+			if(sideA_matchFlag) { sideA_attempts = 13; }
 
 			else {
-				attempts++;
-				subAttempts = 0;
+				sideA_attempts++;
+				sideA_subAttempts = 0;
+				sideB_subAttempts = 0;
+				wait(1);
+			}
+
+			if(sideB_matchFlag) { sideB_attempts = 13; }
+
+			else {
+				sideB_attempts++;
+				sideA_subAttempts = 0;
+				sideB_subAttempts = 0;
 				wait(1);
 			}
 		}
-		if(attempts != 13) { error_loop(ERROR_PWM_SETUP, 0, 0); }
+		if(sideA_attempts != 13) { error_loop(ERROR_PWM_SETUP, 0, 0, SIDE_A); }
+
+		if(sideB_attempts != 13) { error_loop(ERROR_PWM_SETUP, 0, 0, SIDE_B); }
 
 		uint8_t sideA_receptionRegisterCFGA[8];
 		uint8_t sideB_receptionRegisterCFGA[8];
@@ -505,10 +545,12 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 		uint8_t sideA_receptionRegisterCFGA_PECflag;
 		uint8_t sideB_receptionRegisterCFGA_PECflag;
 
-		attempts = 0;
-		subAttempts = 0;
-		while(attempts < ATTEMPT_LIMIT) {
-			while(subAttempts < ATTEMPT_LIMIT) {
+		sideA_attempts = 0;
+		sideB_attempts = 0;
+		sideA_subAttempts = 0;
+		sideB_subAttempts = 0;
+		while(sideA_attempts < ATTEMPT_LIMIT || sideB_attempts < ATTEMPT_LIMIT) {
+			while(sideA_subAttempts < ATTEMPT_LIMIT || sideB_subAttempts < ATTEMPT_LIMIT) {
 				WRCFGA(sideA_payloadRegisterA_evenCells, SIDE_A);
 				WRCFGA(sideB_payloadRegisterA_evenCells, SIDE_B);
 				wait(1);
@@ -520,49 +562,70 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 				sideA_receptionRegisterCFGA_PECflag = verify_PEC15(sideA_receptionRegisterCFGA);
 				sideB_receptionRegisterCFGA_PECflag = verify_PEC15(sideB_receptionRegisterCFGA);
 
-				if(sideA_receptionRegisterCFGA_PECflag == 2 &&
-				   sideB_receptionRegisterCFGA_PECflag == 2)
-				{
-					subAttempts = 13;
-				}
+				if(sideA_receptionRegisterCFGA_PECflag == 2) { sideA_subAttempts = 13; }
+
 				else {
-					subAttempts++;
+					sideA_subAttempts++;
+					wait(1);
+				}
+
+				if(sideB_receptionRegisterCFGA_PECflag == 2) { sideB_subAttempts = 13; }
+
+				else {
+					sideB_subAttempts++;
 					wait(1);
 				}
 			}
-			if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+			if(sideA_subAttempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_A); }
 
-			uint8_t matchFlag = 1;
+			if(sideB_subAttempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_B); }
+
+			uint8_t sideA_matchFlag = 1;
+			uint8_t sideB_matchFlag = 1;
 
 			for(uint8_t i = 4; i < 6; i++) {
-				if(sideA_receptionRegisterCFGA[i] != sideA_payloadRegisterA_evenCells[i] || sideB_receptionRegisterCFGA[i] != sideB_payloadRegisterA_evenCells[i]) {
-					matchFlag = 0;
+				if(sideA_receptionRegisterCFGA[i] != sideA_payloadRegisterA_evenCells[i]) {
+					sideA_matchFlag = 0;
 				}
 			}
-			if(matchFlag) { attempts = 13; }
+
+			for(uint8_t i = 4; i < 6; i++) {
+				if(sideB_receptionRegisterCFGA[i] != sideB_payloadRegisterA_evenCells[i]) {
+					sideB_matchFlag = 0;
+				}
+			}
+
+			if(sideA_matchFlag) { sideA_attempts = 13; }
 
 			else {
-				attempts++;
-				subAttempts = 0;
+				sideA_attempts++;
+				sideA_subAttempts = 0;
+				sideB_subAttempts = 0;
+				wait(1);
+			}
+
+			if(sideB_matchFlag) { sideB_attempts = 13; }
+
+			else {
+				sideB_attempts++;
+				sideA_subAttempts = 0;
+				sideB_subAttempts = 0;
 				wait(1);
 			}
 		}
-		if(attempts != 13) { error_loop(ERROR_BALANCE_INITIATION, 0, 0); }
+		if(sideA_attempts != 13) { error_loop(ERROR_BALANCE_INITIATION, 0, 0, SIDE_A); }
+
+		if(sideB_attempts != 13) { error_loop(ERROR_BALANCE_INITIATION, 0, 0, SIDE_B); }
 
 		config_balance_flags(balanceMsg, evenCells, evenCellCount);
 		balance_led_on();
-		/*
-		WRCFGA(sideA_payloadRegisterA_evenCells, SIDE_A);
-		WRCFGA(sideB_payloadRegisterA_evenCells, SIDE_B);
-		wait(1);
-		*/
 	}
 
 	balanceCounter = 0;
 	measureCounter = 0;
 	transmitCounter = 0;
 	while(evenCellsFlag) {
-		if(measureCounter > 100) {
+		if(measureCounter > MEASURE_INTERVAL) {
 			temperature_sense(moduleTemperatures);
 			resistor_temperature_sense(pcbTemperatures);
 
@@ -591,28 +654,28 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 			for(uint8_t i = 0; i < MODULE_THERM_QTY; i++) {
 				if(moduleTemperatures[i] > MAX_TEMPERATURE) {
 					overheatFlag = 1;
-					faultingThermistorIndex = i + 1;
-					faultingTemperature = moduleTemperatures[i];
+					faultThermistors[faultThermistorQty] = i + 1;
+					faultThermistorQty++;
 				}
 			}
 			if(overheatFlag) { overheatCount++; }
 
 			else {
-				if(overheatCount > 0) {
-					overheatCount--;
-				}
+				if(overheatCount > 0) { overheatCount--; }
+
+				for(uint8_t i = 0; i < MODULE_THERM_QTY; i++) { faultThermistors[i] = 0; }
+
+				faultThermistorQty = 0;
 			}
 			// MODULE OVERHEAT FAULT
 			if(overheatCount > ATTEMPT_LIMIT) {
-				float tempScale = 1000.0f;
-				uint16_t intFaultingTemperature = (uint16_t)(faultingTemperature * tempScale);
-
 				force_mute();
 				wait(1);
 				force_refup();
 
-				error_loop(ERROR_OVERHEAT, intFaultingTemperature, faultingThermistorIndex);
+				error_loop(ERROR_OVERHEAT, faultThermistors, 0, NOT_APPLICABLE);
 			}
+			overheatFlag = 0;
 
 			measureCounter = 0;
 		}
@@ -625,17 +688,80 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 			transmitCounter = 0;
 		}
 
-		if(balanceCounter > 60000) {
+		if(balanceCounter > BALANCE_CYCLE_DURATION) {
 			force_refup();
 			evenCellsFlag = 0;
+		}
+
+		if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
+			uint8_t attempts = 0;
+
+			while(attempts < ATTEMPT_LIMIT) {
+				if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK) {
+
+					if(RxHeader.StdId == CAN_FAULT_ID) {
+						force_refup();
+						wait(1);
+						force_mute();
+						wait(1);
+						silent_error_loop();
+					}
+
+					if(RxHeader.StdId == CAN_STOP_BALANCE_ID) {
+						force_refup();
+						wait(1);
+						*haltBalanceFlag = 0;
+						evenCellsFlag = 0;
+						oddCellsFlag = 0;
+					}
+
+					attempts = 13;
+				}
+				else {
+					attempts++;
+					wait(5);
+				}
+			}
+			if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0, MCU_FAULT); }
+		}
+
+		if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO1) > 0) {
+			uint8_t attempts = 0;
+
+			while(attempts < ATTEMPT_LIMIT) {
+				if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO1, &RxHeader, RxData) == HAL_OK) {
+					if(RxHeader.StdId == CAN_PACK_STATUS_ID) {
+						if(RxData[PACK_STATUS_BYTE_POSITION] == PACK_STATUS_PRECHARGE_START ||
+						   RxData[PACK_STATUS_BYTE_POSITION] == PACK_STATUS_PRECHARGING ||
+						   RxData[PACK_STATUS_BYTE_POSITION] == PACK_STATUS_ACTIVE ||
+						   RxData[PACK_STATUS_BYTE_POSITION] == PACK_STATUS_CHARGING ||
+						   RxData[PACK_STATUS_BYTE_POSITION] == PACK_STATUS_CHARGING_COMPLETE)
+						{
+							force_refup();
+							wait(1);
+							*haltBalanceFlag = 0;
+							evenCellsFlag = 0;
+							oddCellsFlag = 0;
+						}
+					}
+					attempts = 13;
+				}
+				else {
+					attempts++;
+					wait(5);
+				}
+			}
+			if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0, MCU_FAULT); }
 		}
 
 		wait(1);
 	}
 
 	if(oddCellsFlag) {
-		uint8_t attempts = 0;
-		uint8_t subAttempts = 0;
+		uint8_t sideA_attempts = 0;
+		uint8_t sideB_attempts = 0;
+		uint8_t sideA_subAttempts = 0;
+		uint8_t sideB_subAttempts = 0;
 
 		uint8_t sideA_receptionRegisterPWM[8];
 		uint8_t sideB_receptionRegisterPWM[8];
@@ -643,8 +769,8 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 		uint8_t sideA_receptionRegisterPWM_PECflag;
 		uint8_t sideB_receptionRegisterPWM_PECflag;
 
-		while(attempts < ATTEMPT_LIMIT) {
-			while(subAttempts < ATTEMPT_LIMIT) {
+		while(sideA_attempts < ATTEMPT_LIMIT || sideB_attempts < ATTEMPT_LIMIT) {
+			while(sideA_subAttempts < ATTEMPT_LIMIT || sideB_subAttempts < ATTEMPT_LIMIT) {
 				WRPWM(sideA_payloadRegisterPWM_oddCells, SIDE_A);
 				WRPWM(sideB_payloadRegisterPWM_oddCells, SIDE_B);
 				wait(1);
@@ -656,34 +782,60 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 				sideA_receptionRegisterPWM_PECflag = verify_PEC15(sideA_receptionRegisterPWM);
 				sideB_receptionRegisterPWM_PECflag = verify_PEC15(sideB_receptionRegisterPWM);
 
-				if(sideA_receptionRegisterPWM_PECflag == 2 &&
-				   sideB_receptionRegisterPWM_PECflag == 2)
-				{
-					subAttempts = 13;
-				}
+				if(sideA_receptionRegisterPWM_PECflag == 2) { sideA_subAttempts = 13; }
+
 				else {
-					subAttempts++;
+					sideA_subAttempts++;
+					wait(1);
+				}
+
+				if(sideB_receptionRegisterPWM_PECflag == 2) { sideB_subAttempts = 13; }
+
+				else {
+					sideB_subAttempts++;
 					wait(1);
 				}
 			}
-			if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+			if(sideA_subAttempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_A); }
 
-			uint8_t matchFlag = 1;
+			if(sideB_subAttempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_B); }
+
+			uint8_t sideA_matchFlag = 1;
+			uint8_t sideB_matchFlag = 1;
 
 			for(uint8_t i = 0; i < 6; i++) {
-				if(sideA_receptionRegisterPWM[i] != sideA_payloadRegisterPWM_oddCells[i] || sideB_receptionRegisterPWM[i] != sideB_payloadRegisterPWM_oddCells[i]) {
-					matchFlag = 0;
+				if(sideA_receptionRegisterPWM[i] != sideA_payloadRegisterPWM_oddCells[i]) {
+					sideA_matchFlag = 0;
 				}
 			}
-			if(matchFlag) { attempts = 13; }
+
+			for(uint8_t i = 0; i < 6; i++) {
+				if(sideB_receptionRegisterPWM[i] != sideB_payloadRegisterPWM_oddCells[i]) {
+					sideB_matchFlag = 0;
+				}
+			}
+
+			if(sideA_matchFlag) { sideA_attempts = 13; }
 
 			else {
-				attempts++;
-				subAttempts = 0;
+				sideA_attempts++;
+				sideA_subAttempts = 0;
+				sideB_subAttempts = 0;
+				wait(1);
+			}
+
+			if(sideB_matchFlag) { sideB_attempts = 13; }
+
+			else {
+				sideB_attempts++;
+				sideA_subAttempts = 0;
+				sideB_subAttempts = 0;
 				wait(1);
 			}
 		}
-		if(attempts != 13) { error_loop(ERROR_PWM_SETUP, 0, 0); }
+		if(sideA_attempts != 13) { error_loop(ERROR_PWM_SETUP, 0, 0, SIDE_A); }
+
+		if(sideB_attempts != 13) { error_loop(ERROR_PWM_SETUP, 0, 0, SIDE_B); }
 
 		uint8_t sideA_receptionRegisterCFGA[8];
 		uint8_t sideB_receptionRegisterCFGA[8];
@@ -691,10 +843,12 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 		uint8_t sideA_receptionRegisterCFGA_PECflag;
 		uint8_t sideB_receptionRegisterCFGA_PECflag;
 
-		attempts = 0;
-		subAttempts = 0;
-		while(attempts < ATTEMPT_LIMIT) {
-			while(subAttempts < ATTEMPT_LIMIT) {
+		sideA_attempts = 0;
+		sideB_attempts = 0;
+		sideA_subAttempts = 0;
+		sideB_subAttempts = 0;
+		while(sideA_attempts < ATTEMPT_LIMIT || sideB_attempts < ATTEMPT_LIMIT) {
+			while(sideA_subAttempts < ATTEMPT_LIMIT || sideB_subAttempts < ATTEMPT_LIMIT) {
 				WRCFGA(sideA_payloadRegisterA_oddCells, SIDE_A);
 				WRCFGA(sideB_payloadRegisterA_oddCells, SIDE_B);
 				wait(1);
@@ -706,50 +860,70 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 				sideA_receptionRegisterCFGA_PECflag = verify_PEC15(sideA_receptionRegisterCFGA);
 				sideB_receptionRegisterCFGA_PECflag = verify_PEC15(sideB_receptionRegisterCFGA);
 
-				if(sideA_receptionRegisterCFGA_PECflag == 2 &&
-				   sideB_receptionRegisterCFGA_PECflag == 2)
-				{
-					subAttempts = 13;
-				}
+				if(sideA_receptionRegisterCFGA_PECflag == 2) { sideA_subAttempts = 13; }
+
 				else {
-					subAttempts++;
+					sideA_subAttempts++;
+					wait(1);
+				}
+
+				if(sideB_receptionRegisterCFGA_PECflag == 2) { sideB_subAttempts = 13; }
+
+				else {
+					sideB_subAttempts++;
 					wait(1);
 				}
 			}
-			if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+			if(sideA_subAttempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_A); }
 
-			uint8_t matchFlag = 1;
+			if(sideB_subAttempts != 13) { error_loop(ERROR_PEC, 0, 0, SIDE_B); }
+
+			uint8_t sideA_matchFlag = 1;
+			uint8_t sideB_matchFlag = 1;
 
 			for(uint8_t i = 4; i < 6; i++) {
-				if(sideA_receptionRegisterCFGA[i] != sideA_payloadRegisterA_oddCells[i] || sideB_receptionRegisterCFGA[i] != sideB_payloadRegisterA_oddCells[i]) {
-					matchFlag = 0;
+				if(sideA_receptionRegisterCFGA[i] != sideA_payloadRegisterA_oddCells[i]) {
+					sideA_matchFlag = 0;
 				}
 			}
-			if(matchFlag) { attempts = 13; }
+
+			for(uint8_t i = 4; i < 6; i++) {
+				if(sideB_receptionRegisterCFGA[i] != sideB_payloadRegisterA_oddCells[i]) {
+					sideB_matchFlag = 0;
+				}
+			}
+
+			if(sideA_matchFlag) { sideA_attempts = 13; }
 
 			else {
-				attempts++;
-				subAttempts = 0;
+				sideA_attempts++;
+				sideA_subAttempts = 0;
+				sideB_subAttempts = 0;
+				wait(1);
+			}
+
+			if(sideB_matchFlag) { sideB_attempts = 13; }
+
+			else {
+				sideB_attempts++;
+				sideA_subAttempts = 0;
+				sideB_subAttempts = 0;
 				wait(1);
 			}
 		}
-		if(attempts != 13) { error_loop(ERROR_BALANCE_INITIATION, 0, 0); }
+		if(sideA_attempts != 13) { error_loop(ERROR_BALANCE_INITIATION, 0, 0, SIDE_A); }
+
+		if(sideB_attempts != 13) { error_loop(ERROR_BALANCE_INITIATION, 0, 0, SIDE_B); }
 
 		config_balance_flags(balanceMsg, oddCells, oddCellCount);
 		balance_led_on();
-
-		/*
-		WRCFGA(sideA_payloadRegisterA_oddCells, SIDE_A);
-		WRCFGA(sideB_payloadRegisterA_oddCells, SIDE_B);
-		wait(1);
-		*/
 	}
 
 	balanceCounter = 0;
 	measureCounter = 0;
 	transmitCounter = 0;
 	while(oddCellsFlag) {
-		if(measureCounter > 100) {
+		if(measureCounter > MEASURE_INTERVAL) {
 			temperature_sense(moduleTemperatures);
 			resistor_temperature_sense(pcbTemperatures);
 
@@ -777,29 +951,29 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 			for(uint8_t i = 0; i < MODULE_THERM_QTY; i++) {
 				if(moduleTemperatures[i] > MAX_TEMPERATURE) {
 					overheatFlag = 1;
-					faultingThermistorIndex = i + 1;
-					faultingTemperature = moduleTemperatures[i];
+					faultThermistors[faultThermistorQty] = i + 1;
+					faultThermistorQty++;
 				}
 			}
 
 			if(overheatFlag) { overheatCount++; }
 
 			else {
-				if(overheatCount > 0) {
-					overheatCount--;
-				}
+				if(overheatCount > 0) { overheatCount--; }
+
+				for(uint8_t i = 0; i < MODULE_THERM_QTY; i++) { faultThermistors[i] = 0; }
+
+				faultThermistorQty = 0;
 			}
 			// MODULE OVERHEAT FAULT
 			if(overheatCount > ATTEMPT_LIMIT) {
-				float tempScale = 1000.0f;
-				uint16_t intFaultingTemperature = (uint16_t)(faultingTemperature * tempScale);
-
 				force_mute();
 				wait(1);
 				force_refup();
 
-				error_loop(ERROR_OVERHEAT, intFaultingTemperature, faultingThermistorIndex);
+				error_loop(ERROR_OVERHEAT, faultThermistors, 0, NOT_APPLICABLE);
 			}
+			overheatFlag = 0;
 
 			measureCounter = 0;
 		}
@@ -812,9 +986,63 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 			transmitCounter = 0;
 		}
 
-		if(balanceCounter > 60000) {
+		if(balanceCounter > BALANCE_CYCLE_DURATION) {
 			force_refup();
 			oddCellsFlag = 0;
+		}
+
+		if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
+			uint8_t attempts = 0;
+
+			while(attempts < ATTEMPT_LIMIT) {
+				if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK) {
+
+					if(RxHeader.StdId == CAN_FAULT_ID) {
+						force_refup();
+						wait(1);
+						force_mute();
+						wait(1);
+						silent_error_loop();
+					}
+
+					if(RxHeader.StdId == CAN_STOP_BALANCE_ID) {
+						force_refup();
+						wait(1);
+						*haltBalanceFlag = 0;
+						oddCellsFlag = 0;
+					}
+
+					attempts = 13;
+				}
+				else {
+					attempts++;
+					wait(5);
+				}
+			}
+			if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0, MCU_FAULT); }
+		}
+
+		if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO1) > 0) {
+			uint8_t attempts = 0;
+
+			while(attempts < ATTEMPT_LIMIT) {
+				if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO1, &RxHeader, RxData) == HAL_OK) {
+					if(RxHeader.StdId == CAN_PACK_STATUS_ID) {
+						if(RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_IDLE || RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_FAULT) {
+							force_refup();
+							wait(1);
+							*haltBalanceFlag = 0;
+							oddCellsFlag = 0;
+						}
+					}
+					attempts = 13;
+				}
+				else {
+					attempts++;
+					wait(5);
+				}
+			}
+			if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0, MCU_FAULT); }
 		}
 
 		wait(1);
@@ -826,11 +1054,11 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 	// Set all cell balancing flags to zero
 	for(uint8_t i = 4; i < 7; i++) { balanceMsg[i] = 0; }
 
-	transientCounter = 0;
+	balanceCounter = 0;
 	measureCounter = 0;
 	transmitCounter = 0;
-	while(transientCounter < 20000) {
-		if(measureCounter > 100) {
+	while(balanceCounter < POST_BALANCE_DELAY && *haltBalanceFlag == 73) {
+		if(measureCounter > MEASURE_INTERVAL) {
 			temperature_sense(moduleTemperatures);
 			resistor_temperature_sense(pcbTemperatures);
 
@@ -853,24 +1081,23 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 			for(uint8_t i = 0; i < MODULE_THERM_QTY; i++) {
 				if(moduleTemperatures[i] > MAX_TEMPERATURE) {
 					overheatFlag = 1;
-					faultingThermistorIndex = i + 1;
-					faultingTemperature = moduleTemperatures[i];
+					faultThermistors[faultThermistorQty] = i + 1;
+					faultThermistorQty++;
 				}
 			}
 			if(overheatFlag) { overheatCount++; }
 
 			else {
-				if(overheatCount > 0) {
-					overheatCount--;
-				}
+				if(overheatCount > 0) { overheatCount--; }
+
+				for(uint8_t i = 0; i < MODULE_THERM_QTY; i++) { faultThermistors[i] = 0; }
+
+				faultThermistorQty = 0;
 			}
 			// MODULE OVERHEAT FAULT
-			if(overheatCount > ATTEMPT_LIMIT) {
-				float tempScale = 1000.0f;
-				uint16_t intFaultingTemperature = (uint16_t)(faultingTemperature * tempScale);
+			if(overheatCount > ATTEMPT_LIMIT) { error_loop(ERROR_OVERHEAT, faultThermistors, 0, NOT_APPLICABLE); }
 
-				error_loop(ERROR_OVERHEAT, intFaultingTemperature, faultingThermistorIndex);
-			}
+			overheatFlag = 0;
 
 			measureCounter = 0;
 		}
@@ -883,9 +1110,51 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 			transmitCounter = 0;
 		}
 
+		if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0) {
+			uint8_t attempts = 0;
+
+			while(attempts < ATTEMPT_LIMIT) {
+				if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK) {
+
+					if(RxHeader.StdId == CAN_FAULT_ID) { silent_error_loop(); }
+
+					if(RxHeader.StdId == CAN_STOP_BALANCE_ID) { *haltBalanceFlag = 0; }
+
+					attempts = 13;
+				}
+				else {
+					attempts++;
+					wait(5);
+				}
+			}
+			if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0, MCU_FAULT); }
+		}
+
+		if(HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO1) > 0) {
+			uint8_t attempts = 0;
+
+			while(attempts < ATTEMPT_LIMIT) {
+				if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO1, &RxHeader, RxData) == HAL_OK) {
+					if(RxHeader.StdId == CAN_PACK_STATUS_ID) {
+						if(RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_IDLE || RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_FAULT) {
+							*haltBalanceFlag = 0;
+						}
+					}
+					attempts = 13;
+				}
+				else {
+					attempts++;
+					wait(5);
+				}
+			}
+			if(attempts != 13) { error_loop(ERROR_CAN_READ, 0, 0, MCU_FAULT); }
+		}
+
 		wait(1);
 	}
 	hot_led_off();
+
+	if(*haltBalanceFlag == 73) { quick_diagnosis(0); }
 }
 
 

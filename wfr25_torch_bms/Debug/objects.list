@@ -9,7 +9,6 @@
 "./Core/Src/torch_diagnostic.o"
 "./Core/Src/torch_ltc6813.o"
 "./Core/Src/torch_main.o"
-"./Core/Src/torch_states.o"
 "./Core/Src/torch_stm32.o"
 "./Core/Src/torch_temperature.o"
 "./Core/Src/torch_voltage.o"

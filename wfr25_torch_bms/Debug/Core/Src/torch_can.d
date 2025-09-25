@@ -32,7 +32,8 @@ Core/Src/torch_can.o: ../Core/Src/torch_can.c ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Core/Inc/torch_can.h ../Core/Inc/torch_main.h \
- ../Core/Inc/torch_stm32.h ../Core/Inc/torch_config.h
+ ../Core/Inc/torch_stm32.h ../Core/Inc/torch_dependencies.h \
+ ../Core/Inc/torch_diagnostic.h
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
@@ -69,4 +70,5 @@ Core/Src/torch_can.o: ../Core/Src/torch_can.c ../Core/Inc/main.h \
 ../Core/Inc/torch_can.h:
 ../Core/Inc/torch_main.h:
 ../Core/Inc/torch_stm32.h:
-../Core/Inc/torch_config.h:
+../Core/Inc/torch_dependencies.h:
+../Core/Inc/torch_diagnostic.h:

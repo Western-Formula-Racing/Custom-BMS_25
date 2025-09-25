@@ -34,7 +34,7 @@ Core/Src/torch_main.o: ../Core/Src/torch_main.c ../Core/Inc/main.h \
  ../Core/Inc/torch_main.h ../Core/Inc/torch_stm32.h \
  ../Core/Inc/torch_ltc6813.h ../Core/Inc/torch_diagnostic.h \
  ../Core/Inc/torch_can.h ../Core/Inc/torch_balance.h \
- ../Core/Inc/torch_config.h
+ ../Core/Inc/torch_dependencies.h
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
@@ -74,4 +74,4 @@ Core/Src/torch_main.o: ../Core/Src/torch_main.c ../Core/Inc/main.h \
 ../Core/Inc/torch_diagnostic.h:
 ../Core/Inc/torch_can.h:
 ../Core/Inc/torch_balance.h:
-../Core/Inc/torch_config.h:
+../Core/Inc/torch_dependencies.h:

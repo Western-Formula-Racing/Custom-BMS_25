@@ -1,7 +1,7 @@
-../Core/Src/torch_balance.c:12:6:resistor_temperature_sense	248	static
-../Core/Src/torch_balance.c:146:9:balance_check	32	static
-../Core/Src/torch_balance.c:172:6:extract_min_cell_voltage	184	static
-../Core/Src/torch_balance.c:266:6:balance_cycle	632	dynamic
-../Core/Src/torch_balance.c:892:6:config_balance_flags	48	static
-../Core/Src/torch_balance.c:985:6:config_DCC_bits	40	static
-../Core/Src/torch_balance.c:1039:6:config_PWM_bits	72	static
+../Core/Src/torch_balance.c:13:6:resistor_temperature_sense	248	static
+../Core/Src/torch_balance.c:158:9:balance_check	32	static
+../Core/Src/torch_balance.c:184:6:extract_min_cell_voltage	184	static
+../Core/Src/torch_balance.c:278:6:balance_cycle	656	dynamic
+../Core/Src/torch_balance.c:1161:6:config_balance_flags	48	static
+../Core/Src/torch_balance.c:1254:6:config_DCC_bits	40	static
+../Core/Src/torch_balance.c:1308:6:config_PWM_bits	72	static

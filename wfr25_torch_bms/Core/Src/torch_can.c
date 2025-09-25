@@ -2,7 +2,8 @@
 #include "torch_can.h"
 #include "torch_main.h"
 #include "torch_stm32.h"
-#include "torch_config.h"
+#include "torch_dependencies.h"
+#include "torch_diagnostic.h"
 
 
 void can_transmit(uint16_t canMsgID, uint8_t *payload)
@@ -24,24 +25,24 @@ void can_transmit(uint16_t canMsgID, uint8_t *payload)
 
 void silent_error_loop(void)
 {
-	pull_high(GPIOA, GPIO_PIN_8);		// ACTIVE LED
-	pull_high(GPIOC, GPIO_PIN_9);		// CHARGE LED
-	//stop_timer(&htim2);
-	//HAL_CAN_Stop(&hcan1);
+	active_led_on();
+	charge_led_on();
+	balance_led_off();
+	hot_led_off();
 
 	uint16_t cellVoltages[CELL_QTY];
-	float temperatures[THERM_QTY];
+	float moduleTemperatures[MODULE_THERM_QTY];
 	transmitCounter = 0;
 	measureCounter = 0;
 	while(1) {
 
-		if(measureCounter > 100) {
+		if(measureCounter > MEASURE_INTERVAL) {
 			if(!refup_check()) {
 				force_refup();
 				wait(1);
 			}
 
-			temperature_sense(temperatures);
+			temperature_sense(moduleTemperatures);
 			voltage_sense(cellVoltages);
 
 			measureCounter = 0;
@@ -49,7 +50,7 @@ void silent_error_loop(void)
 
 		if(transmitCounter > transmissionDelay) {
 			transmit_voltages(cellVoltages);
-			transmit_temperatures(temperatures);
+			transmit_temperatures(moduleTemperatures);
 
 			transmitCounter = 0;
 		}
@@ -59,80 +60,210 @@ void silent_error_loop(void)
 }
 
 
-void error_loop(uint8_t errorCode, uint16_t faultValue, uint8_t faultIndex)
+void error_loop(uint8_t errorCode, uint8_t *faultThermistors, uint8_t *faultCells, uint8_t faultComponent)
 {
 	uint8_t msgFault[8];
 
+	uint8_t cell0Status = 0;
+	uint8_t cell1Status = 0;
+	uint8_t cell2Status = 0;
+	uint8_t cell3Status = 0;
+	uint8_t cell4Status = 0;
+	uint8_t cell5Status = 0;
+	uint8_t cell6Status = 0;
+	uint8_t cell7Status = 0;
+	uint8_t cell8Status = 0;
+	uint8_t cell9Status = 0;
+	uint8_t cell10Status = 0;
+	uint8_t cell11Status = 0;
+	uint8_t cell12Status = 0;
+	uint8_t cell13Status = 0;
+	uint8_t cell14Status = 0;
+	uint8_t cell15Status = 0;
+	uint8_t cell16Status = 0;
+	uint8_t cell17Status = 0;
+	uint8_t cell18Status = 0;
+	uint8_t cell19Status = 0;
+	uint8_t cell20Status = 0;
+
+	uint8_t thermistor1Status = 0;
+	uint8_t thermistor2Status = 0;
+	uint8_t thermistor3Status = 0;
+	uint8_t thermistor4Status = 0;
+	uint8_t thermistor5Status = 0;
+	uint8_t thermistor6Status = 0;
+	uint8_t thermistor7Status = 0;
+	uint8_t thermistor8Status = 0;
+	uint8_t thermistor9Status = 0;
+	uint8_t thermistor10Status = 0;
+	uint8_t thermistor11Status = 0;
+	uint8_t thermistor12Status = 0;
+	uint8_t thermistor13Status = 0;
+	uint8_t thermistor14Status = 0;
+	uint8_t thermistor15Status = 0;
+	uint8_t thermistor16Status = 0;
+	uint8_t thermistor17Status = 0;
+	uint8_t thermistor18Status = 0;
+
+	if(errorCode == ERROR_OVERHEAT || errorCode == ERROR_UNDERVOLT || errorCode == ERROR_OVERVOLT) { full_diagnosis(); }
+
 	msgFault[0] = moduleID;
 	msgFault[1] = errorCode;
+	msgFault[2] = faultComponent;
 
-	switch(errorCode) {
-		case ERROR_OVERHEAT:
-			// Setting cell voltage portions of fault message to zero
-			msgFault[2] = 0;
-			msgFault[3] = 0;
-			msgFault[4] = 0;
-
-			msgFault[5] = (uint8_t)(faultValue & 0xFF);
-			msgFault[6] = (uint8_t)((faultValue >> 8) & 0xFF);
-			msgFault[7] = faultIndex;
-			break;
-		case ERROR_THERMISTOR_OPEN:
-			msgFault[2] = 0;
-			msgFault[3] = 0;
-			msgFault[4] = 0;
-
-			msgFault[5] = 0;
-			msgFault[6] = 0;
-			msgFault[7] = faultIndex;
-			break;
-		case ERROR_UNDERVOLT:
-			msgFault[2] = (uint8_t)(faultValue & 0xFF);
-			msgFault[3] = (uint8_t)((faultValue >> 8) & 0xFF);
-			msgFault[4] = faultIndex;
-
-			// Setting temperature portions of fault message to zero
-			msgFault[5] = 0;
-			msgFault[6] = 0;
-			msgFault[7] = 0;
-			break;
-		case ERROR_OVERVOLT:
-			msgFault[2] = (uint8_t)(faultValue & 0xFF);
-			msgFault[3] = (uint8_t)((faultValue >> 8) & 0xFF);
-			msgFault[4] = faultIndex;
-
-			// Setting temperature portions of fault message to zero
-			msgFault[5] = 0;
-			msgFault[6] = 0;
-			msgFault[7] = 0;
-			break;
-		default:
-			msgFault[2] = 0;
-			msgFault[3] = 0;
-			msgFault[4] = 0;
-			msgFault[5] = 0;
-			msgFault[6] = 0;
-			msgFault[7] = 0;
-			break;
+	if(errorCode == ERROR_OVERHEAT || errorCode == ERROR_THERMISTOR_OPEN) {
+		for(uint8_t i = 0; i < MODULE_THERM_QTY; i++) {
+			switch(*(faultThermistors + i)) {
+				case 1:
+					thermistor1Status = 1;
+					break;
+				case 2:
+					thermistor2Status = 1;
+					break;
+				case 3:
+					thermistor3Status = 1;
+					break;
+				case 4:
+					thermistor4Status = 1;
+					break;
+				case 5:
+					thermistor5Status = 1;
+					break;
+				case 6:
+					thermistor6Status = 1;
+					break;
+				case 7:
+					thermistor7Status = 1;
+					break;
+				case 8:
+					thermistor8Status = 1;
+					break;
+				case 9:
+					thermistor9Status = 1;
+					break;
+				case 10:
+					thermistor10Status = 1;
+					break;
+				case 11:
+					thermistor11Status = 1;
+					break;
+				case 12:
+					thermistor12Status = 1;
+					break;
+				case 13:
+					thermistor13Status = 1;
+					break;
+				case 14:
+					thermistor14Status = 1;
+					break;
+				case 15:
+					thermistor15Status = 1;
+					break;
+				case 16:
+					thermistor16Status = 1;
+					break;
+				case 17:
+					thermistor17Status = 1;
+					break;
+				case 18:
+					thermistor18Status = 1;
+					break;
+			}
+		}
 	}
+	else if(errorCode == ERROR_UNDERVOLT || errorCode == ERROR_OVERVOLT || errorCode == ERROR_CELL_OPEN) {
+		for(uint8_t i = 0; i < CELL_QTY + 1; i++) {
+			switch(*(faultCells + i)) {
+				case 1:
+					cell1Status = 1;
+					break;
+				case 2:
+					cell2Status = 1;
+					break;
+				case 3:
+					cell3Status = 1;
+					break;
+				case 4:
+					cell4Status = 1;
+					break;
+				case 5:
+					cell5Status = 1;
+					break;
+				case 6:
+					cell6Status = 1;
+					break;
+				case 7:
+					cell7Status = 1;
+					break;
+				case 8:
+					cell8Status = 1;
+					break;
+				case 9:
+					cell9Status = 1;
+					break;
+				case 10:
+					cell10Status = 1;
+					break;
+				case 11:
+					cell11Status = 1;
+					break;
+				case 12:
+					cell12Status = 1;
+					break;
+				case 13:
+					cell13Status = 1;
+					break;
+				case 14:
+					cell14Status = 1;
+					break;
+				case 15:
+					cell15Status = 1;
+					break;
+				case 16:
+					cell16Status = 1;
+					break;
+				case 17:
+					cell17Status = 1;
+					break;
+				case 18:
+					cell18Status = 1;
+					break;
+				case 19:
+					cell19Status = 1;
+					break;
+				case 20:
+					cell20Status = 1;
+					break;
+				case 21:
+					cell0Status = 1;
+					break;
+			}
+		}
+	}
+	msgFault[3] = (cell7Status << 7) | (cell6Status << 6) | (cell5Status << 5) | (cell4Status << 4) | (cell3Status << 3) | (cell2Status << 2) | (cell1Status << 1) | (cell0Status << 0);
+	msgFault[4] = (cell15Status << 7) | (cell14Status << 6) | (cell13Status << 5) | (cell12Status << 4) | (cell11Status << 3) | (cell10Status << 2) | (cell9Status << 1) | (cell8Status << 0);
+	msgFault[5] = (thermistor3Status << 7) | (thermistor2Status << 6) | (thermistor1Status << 5) | (cell20Status << 4) | (cell19Status << 3) | (cell18Status << 2) | (cell17Status << 1) | (cell16Status << 0);
+	msgFault[6] = (thermistor11Status << 7) | (thermistor10Status << 6) | (thermistor9Status << 5) | (thermistor8Status << 4) | (thermistor7Status << 3) | (thermistor6Status << 2) | (thermistor5Status << 1) | (thermistor4Status << 0);
+	msgFault[7] = (thermistor18Status << 6) | (thermistor17Status << 5) | (thermistor16Status << 4) | (thermistor15Status << 3) | (thermistor14Status << 2) | (thermistor13Status << 1) | (thermistor12Status << 0);
+
 	active_led_on();
 	charge_led_on();
 	balance_led_off();
 	hot_led_off();
 
 	uint16_t cellVoltages[CELL_QTY];
-	float temperatures[THERM_QTY];
+	float moduleTemperatures[MODULE_THERM_QTY];
 	transmitCounter = 0;
 	measureCounter = 0;
 	while(1) {
 
-		if(measureCounter > 100) {
+		if(measureCounter > MEASURE_INTERVAL) {
 			if(!refup_check()) {
 				force_refup();
 				wait(1);
 			}
 
-			temperature_sense(temperatures);
+			temperature_sense(moduleTemperatures);
 			voltage_sense(cellVoltages);
 
 			measureCounter = 0;
@@ -141,7 +272,7 @@ void error_loop(uint8_t errorCode, uint16_t faultValue, uint8_t faultIndex)
 		if(transmitCounter > transmissionDelay) {
 			can_transmit(CAN_FAULT_ID, msgFault);
 			transmit_voltages(cellVoltages);
-			transmit_temperatures(temperatures);
+			transmit_temperatures(moduleTemperatures);
 
 			transmitCounter = 0;
 		}
@@ -320,9 +451,9 @@ void transmit_temperatures(float *temperatures)
 	uint8_t msgT4[8];
 	uint8_t msgT5[8];
 	float tempScale = 1000.0f;
-	uint16_t intTemps[THERM_QTY];
+	uint16_t intTemps[MODULE_THERM_QTY];
 
-	for(uint8_t i = 0; i < THERM_QTY; i++) {
+	for(uint8_t i = 0; i < MODULE_THERM_QTY; i++) {
 		intTemps[i] = (uint16_t)(*(temperatures + i) * tempScale);
 	}
 

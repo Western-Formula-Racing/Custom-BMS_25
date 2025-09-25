@@ -43,7 +43,7 @@
 ../Core/Src/torch_ltc6813.c:690:6:DIAGN	1
 ../Core/Src/torch_ltc6813.c:704:6:MUTE	1
 ../Core/Src/torch_ltc6813.c:718:6:UNMUTE	1
-../Core/Src/torch_ltc6813.c:732:6:force_refup	4
-../Core/Src/torch_ltc6813.c:763:9:refup_check	7
-../Core/Src/torch_ltc6813.c:801:6:force_mute	9
-../Core/Src/torch_ltc6813.c:854:6:force_unmute	9
+../Core/Src/torch_ltc6813.c:732:6:force_refup	3
+../Core/Src/torch_ltc6813.c:763:9:refup_check	6
+../Core/Src/torch_ltc6813.c:801:6:force_mute	7
+../Core/Src/torch_ltc6813.c:854:6:force_unmute	7

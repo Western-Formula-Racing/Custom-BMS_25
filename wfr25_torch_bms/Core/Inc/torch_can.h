@@ -1,6 +1,7 @@
 #ifndef INC_TORCH_CAN_H_
 #define INC_TORCH_CAN_H_
 
+// Error codes
 #define ERROR_OVERHEAT 69
 #define ERROR_UNDERVOLT 70
 #define ERROR_OVERVOLT 71
@@ -21,7 +22,21 @@
 #define ERROR_PEC 86
 #define ERROR_CAN_READ 87
 
+// Error message ID
+#define CAN_FAULT_ID 1000
+
+// Faulting component (side A & side B from torch_main.h are technically included)
+#define MCU_FAULT 2
+#define NOT_APPLICABLE 3
+
 // Balance message IDs
+#define CAN_EXTRACT_VMIN_ID 992
+#define CAN_M2_VMIN_ID 993
+#define CAN_M3_VMIN_ID 994
+#define CAN_M4_VMIN_ID 995
+#define CAN_M5_VMIN_ID 996
+#define CAN_MIN_VCELL_ID 997
+
 #define CAN_M1_BALANCE_ID 1001
 #define CAN_M2_BALANCE_ID 1002
 #define CAN_M3_BALANCE_ID 1003
@@ -59,7 +74,7 @@
 #define CAN_M5_V4_ID 1029
 #define CAN_M5_V5_ID 1030
 
-// TEMPERATURE MESSAGE IDs
+// Temperature message IDs
 #define CAN_M1_T1_ID 1031
 #define CAN_M1_T2_ID 1032
 #define CAN_M1_T3_ID 1033
@@ -90,29 +105,43 @@
 #define CAN_M5_T4_ID 1054
 #define CAN_M5_T5_ID 1055
 
-// FORCE BALANCE MESSAGE IDs
-#define CAN_EXTRACT_VMIN_ID 69
-#define CAN_M2_VMIN_ID 70
-#define CAN_M3_VMIN_ID 71
-#define CAN_M4_VMIN_ID 72
-#define CAN_M5_VMIN_ID 73
 
-void can_transmit(uint16_t canMsgID, uint8_t *payload);
+// Directly transmits all CAN messages
+void can_transmit(uint16_t canMsgID,		// ID of the CAN message that needs to be sent
+				  uint8_t *payload			// Pointer to array holding the CAN message data
+				 );
 
-void transmit_balance(uint8_t *balanceMsg);
+// Transmits the TORCH_Mx_BALANCE message
+void transmit_balance(uint8_t *balanceMsg		// Pointer to array holding the balance CAN message
+					 );
 
-void transmit_balance_initiation(uint16_t absMinCellVoltage);
+// Transmits the BMS_Min_VCELL message
+void transmit_balance_initiation(uint16_t absMinCellVoltage		// Holds the lowest cell voltage in the entire pack
+								);
 
+// Transmits the TORCH_EXTRACT_VMIN (module 1 is the only module that sends this message)
 void transmit_extract_vmin(void);
 
-void transmit_vmin(uint16_t minCellVoltage);
+// Transmits the TORCH_Mx_VMIN (modules 2 to 5 are the only modules that send this message)
+void transmit_vmin(uint16_t minCellVoltage		// Holds the lowest cell voltage in the module that's sending said message
+				  );
 
-void transmit_voltages(uint16_t *cellVoltages);
+// Transmits the TORCH_Mx_Vx messages
+void transmit_voltages(uint16_t *cellVoltages		// Pointer to array holding the cell voltages
+					  );
 
-void transmit_temperatures(float *temperatures);
+// Transmits the TORCH_Mx_Tx messages
+void transmit_temperatures(float *temperatures		// Pointer to array holding the module temperatures
+						  );
 
-void error_loop(uint8_t errorCode, uint16_t faultValue, uint8_t faultIndex);
+// BMS enters the error loop and transmits the TORCH_FAULT message
+void error_loop(uint8_t errorCode,				// Error code explaining the reason for fault
+				uint8_t *faultThermistors,		// Pointer to array holding the thermistors that're either too hot or open
+				uint8_t *faultCells,			// Pointer to array holding the cells that're either too low of a voltage, too high of a voltage, or open
+				uint8_t faultComponent			// Component that's causing the fault
+			   );
 
+// BMS enters the silent error loop, where it only transmits module data
 void silent_error_loop(void);
 
 #endif

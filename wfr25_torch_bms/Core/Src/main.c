@@ -24,7 +24,7 @@
 #include "torch_main.h"
 #include "torch_stm32.h"
 #include "torch_can.h"
-#include "torch_config.h"
+#include "torch_dependencies.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -63,7 +63,7 @@ static void MX_SPI1_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_CAN1_Init(uint8_t moduleID);
+static void MX_CAN1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -106,7 +106,7 @@ int main(void)
   MX_SPI3_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
-  MX_CAN1_Init(moduleID);
+  MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
   torch_main();
   /* USER CODE END 2 */
@@ -226,7 +226,7 @@ static void MX_ADC1_Init(void)
   * @param None
   * @retval None
   */
-void MX_CAN1_Init(uint8_t moduleID)
+static void MX_CAN1_Init(void)
 {
 
   /* USER CODE BEGIN CAN1_Init 0 */
@@ -237,8 +237,8 @@ void MX_CAN1_Init(uint8_t moduleID)
 
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
-  hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.Prescaler = 3;
+  hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
   hcan1.Init.TimeSeg1 = CAN_BS1_11TQ;
   hcan1.Init.TimeSeg2 = CAN_BS2_4TQ;
@@ -268,37 +268,45 @@ void MX_CAN1_Init(uint8_t moduleID)
   HAL_CAN_ConfigFilter(&hcan1, &canFilter);
 
   canFilter.FilterBank = 2;
-  canFilter.FilterIdHigh = CAN_MIN_VCELL_ID << 5;
+  canFilter.FilterIdHigh = CAN_START_BALANCE_ID << 5;
   HAL_CAN_ConfigFilter(&hcan1, &canFilter);
 
   canFilter.FilterBank = 3;
+  canFilter.FilterIdHigh = CAN_STOP_BALANCE_ID << 5;
+  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
+
+  canFilter.FilterBank = 4;
   canFilter.FilterFIFOAssignment = CAN_RX_FIFO1;
-  canFilter.FilterIdHigh = CAN_PACK_STAT_ID << 5;
+  canFilter.FilterIdHigh = CAN_PACK_STATUS_ID << 5;
   HAL_CAN_ConfigFilter(&hcan1, &canFilter);
 
   switch(moduleID) {
   	  case 1:
-  		  canFilter.FilterBank = 4;
+  		  canFilter.FilterBank = 5;
   		  canFilter.FilterFIFOAssignment = CAN_RX_FIFO0;
   		  canFilter.FilterIdHigh = CAN_M2_VMIN_ID << 5;
   		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
 
-  		  canFilter.FilterBank = 5;
+  		  canFilter.FilterBank = 6;
   		  canFilter.FilterIdHigh = CAN_M3_VMIN_ID << 5;
   		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
 
-  		  canFilter.FilterBank = 6;
+  		  canFilter.FilterBank = 7;
   		  canFilter.FilterIdHigh = CAN_M4_VMIN_ID << 5;
   		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
 
-  		  canFilter.FilterBank = 7;
+  		  canFilter.FilterBank = 8;
   		  canFilter.FilterIdHigh = CAN_M5_VMIN_ID << 5;
   		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
   		  break;
   	  default:
-  		  canFilter.FilterBank = 4;
+  		  canFilter.FilterBank = 5;
   		  canFilter.FilterFIFOAssignment = CAN_RX_FIFO0;
   		  canFilter.FilterIdHigh = CAN_EXTRACT_VMIN_ID << 5;
+  		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
+
+  		  canFilter.FilterBank = 6;
+  		  canFilter.FilterIdHigh = CAN_MIN_VCELL_ID << 5;
   		  HAL_CAN_ConfigFilter(&hcan1, &canFilter);
   		  break;
   }
@@ -508,12 +516,10 @@ void TIM2_IRQHandler(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM2) {
-        Counter++;
         transmitCounter++;
         measureCounter++;
         balanceCounter++;
-        transientCounter++;
-        //canTimeoutCounter++;
+        diagnosisCounter++;
     }
 }
 /* USER CODE END 4 */

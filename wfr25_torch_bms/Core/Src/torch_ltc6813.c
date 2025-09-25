@@ -755,7 +755,7 @@ void force_refup(void)
 		}
 	}
 	if(attempts != 13) {
-		error_loop(ERROR_PEC, 0, 0);
+		//error_loop(ERROR_PEC, 0, 0);
 	}
 }
 
@@ -790,7 +790,7 @@ uint8_t refup_check(void)
 			wait(1);
 		}
 	}
-	if(attempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+	//if(attempts != 13) { error_loop(ERROR_PEC, 0, 0); }
 
 	if(sideA_refonBit == 1 && sideB_refonBit == 1) { return 1; }
 
@@ -834,7 +834,7 @@ void force_mute(void)
 				wait(1);
 			}
 		}
-		if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+		//if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
 
 		sideA_muteBit = (sideA_receivedRegisterB[1] >> 7) & 0x01;
 		sideB_muteBit = (sideB_receivedRegisterB[1] >> 7) & 0x01;
@@ -847,7 +847,7 @@ void force_mute(void)
 			wait(1);
 		}
 	}
-	if(attempts != 13) { error_loop(ERROR_MUTE, 0, 0); }
+	//if(attempts != 13) { error_loop(ERROR_MUTE, 0, 0); }
 }
 
 
@@ -887,7 +887,7 @@ void force_unmute(void)
 				wait(1);
 			}
 		}
-		if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
+		//if(subAttempts != 13) { error_loop(ERROR_PEC, 0, 0); }
 
 		sideA_muteBit = (sideA_receivedRegisterB[1] >> 7) & 0x01;
 		sideB_muteBit = (sideB_receivedRegisterB[1] >> 7) & 0x01;
@@ -900,5 +900,5 @@ void force_unmute(void)
 			wait(1);
 		}
 	}
-	if(attempts != 13) { error_loop(ERROR_MUTE, 0, 0); }
+	//if(attempts != 13) { error_loop(ERROR_MUTE, 0, 0); }
 }

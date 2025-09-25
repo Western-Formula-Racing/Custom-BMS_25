@@ -1,15 +1,29 @@
 #include "main.h"
+#include "torch_main.h"
 #include "torch_stm32.h"
 
-volatile uint32_t Counter = 0;
+
+void ltc6820_awaken(void)
+{
+	pull_low(GPIOA, GPIO_PIN_4);		// LTC6820 side A !SS
+	pull_low(GPIOA, GPIO_PIN_15);		// LTC6820 side B !SS
+	pull_high(GPIOC, GPIO_PIN_4);		// LTC6820 side A force EN
+	pull_high(GPIOD, GPIO_PIN_2);		// LTC6820 side B force EN
+}
 
 
 void low_power_state(void)
 {
+	// Four lines below put the LTC6820s to sleep
 	pull_low(GPIOC, GPIO_PIN_4);		// LTC6820 side A go sleep
 	pull_low(GPIOD, GPIO_PIN_2);		// LTC6820 side B go sleep
 	pull_high(GPIOA, GPIO_PIN_4);		// LTC6820 side A !SS
 	pull_high(GPIOA, GPIO_PIN_15);		// LTC6820 side B !SS
+
+	if(bmsMode == 1) {
+		HAL_CAN_Stop(&hcan1);
+		stop_timer(&htim2);
+	}
 
 	blink();
 }
@@ -121,8 +135,6 @@ void start_timer(TIM_HandleTypeDef *htim)
 	HAL_StatusTypeDef status;										// status indicates whether the reception was successful or not
 	uint8_t attempts = 0;											// 5 attempts
 
-	Counter = 0;
-
 	while(attempts < 5) {
 		status = HAL_TIM_Base_Start_IT(htim);
 
@@ -146,7 +158,6 @@ void start_timer(TIM_HandleTypeDef *htim)
 			  pull_low(GPIOC, GPIO_PIN_8);
 			  pull_low(GPIOC, GPIO_PIN_7);
 			  wait(250);
-			  // ADD CAN MESSAGE SPAM
 		}
 	}
 }
@@ -169,7 +180,6 @@ void stop_timer(TIM_HandleTypeDef *htim)
 	}
 	if(attempts == 10) {
 		__HAL_TIM_SET_COUNTER(htim, 0);
-		Counter = 0;
 	}
 
 	else {

@@ -38,17 +38,15 @@ Checks for open circuits on the cell voltage connections. If an open circuit's d
 #### Open Thermistor Check
 Checks for open circuits on the module thermistor connections. If an open circuit's detected, error code 73 is thrown.
 
-The full diagnosis takes around 120 to 150 milliseconds to complete. If all the tests pass, then the BMS enters its primary loop.
+The full diagnosis takes around 120 to 150 milliseconds to complete. The BMS will have all four of its LEDs on while its performing the diagnosis. If all the tests pass and forceBalance is disabled, then the BMS enters its primary loop.
 
-### Active/Charge
-This is the primary loop of the BMS. Here it's periodically reading cell voltages, module temperatures, and transmitting its data over CAN.
-It's worth noting that from the STM32 program's perspective, Active and Charge are practically identical states; the BMS continues reading module parameters
-and transmitting data at the same frequency. The blue 'CHARGE' LED turns on when the pack's charging, while the green 'ACTIVE' LED is on in all other cases (i.e. Idle, Active, Precharge).
+### Monitoring
+This is the primary loop of the BMS. Here it's periodically reading cell voltages, module temperatures, and transmitting its findings over CAN. The blue 'CHARGE' LED turns on when the pack's charging, while the green 'ACTIVE' LED is on in all other cases (i.e. Idle, Active, Precharge).
 
 ### Quick Diagnosis
 This is a less extensive self-diagnosis that unlike the full diagnosis, occurs periodically during runtime. Here the BMS checks the LTC6813 analog supply,
-digital supply, ADCs, open cell connections, and open thermistor connections. The BMS performs this quick diagnosis every 10 seconds while it's in the Active/Charge
-state as well as once at the end of every balancing cycle.
+digital supply, ADCs, open cell connections, and open thermistor connections. The BMS performs this quick diagnosis every 10 seconds while it's in the Monitoring
+state as well as once at the end of every balancing cycle. Like the Full Diagnosis, all LEDs turn on during this state.
 
 ### Balancing
 This is when the BMS is passively balancing the cells. The BMS enters the Balancing state if the empty TORCH_START_BALANCE CAN message is received or if forceBalance is set to 1 on module 1. The following chain of events occur when the BMS is ordered to start balancing:
@@ -64,9 +62,13 @@ By default, a cell is identified to be in need of balancing if its voltage is 15
 4. The module enters the Quick Diagnosis state to verify its internal status.
 5. If the module still contains cells in need of balancing, it repeats the cycle. Otherwise it leaves the Balancing state.<br>
 
+The TORCH_Mx_BALANCE CAN message (where x is equal to the module's ID) is broadcasted by a module while it's in the balancing cycle. However, the orange 'BALANCING' LED **only** turns on while the balancing resistors are being dissipated; in other words, it only turns on during stages 1 and 2 outlined above.<br>
+
+The surface temperature the balancing resistors are monitored during the balancing cycle. By default, if it surpasses 45 degrees Celcius, the 'HOT!' LED will turn on to warn the user. If it surpasses 115 degrees Celcius, balancing will stop for said resistor group to let the resistor cool down; a fault **will not** be thrown.
+
 Besides power cycling, there are three ways the BMS stops balancing:
-1. The empty TORCH_STOP_BALANCE CAN message is received. This forces all balancing modules to stop balancing and enter the Active/Charge state.
-2. The AIRs are closed. The BMS cannot continue or initiate balancing if the battery pack is armed. If the AIRs are closed and the TORCH_START_BALANCE CAN message is received, the BMS will ignore the command. If AIRs close while the BMS is balancing, it will abort balancing and enter the Active/Charge state.
+1. The empty TORCH_STOP_BALANCE CAN message is received. This forces all balancing modules to stop balancing and enter the Monitoring state.
+2. The AIRs are closed. The BMS cannot continue or initiate balancing if the battery pack is armed. If the AIRs are closed and the TORCH_START_BALANCE CAN message is received, the BMS will ignore the command. If AIRs close while the BMS is balancing, it will abort balancing and enter the Monitoring state.
 3. All cells become within 15 mV of the lowest cell voltage in the pack. Balancing is considered completed when this happens.<br>
 
-When balancing's complete, the module enters the Low Power state. This is to minimize current consumption in case one module is wildly out of balance relative to the others.
+When balancing's complete, the module enters the Low Power state. This permits the user to leave the BMS balancing with minimal attention, as a module that has finished balancing will consume neglible current. Once all modules are done balancing, the user can simply power cycle to return to the normal operating mode sequence.

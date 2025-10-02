@@ -9,11 +9,11 @@
 // PackStatus values
 #define PACK_STATUS_BYTE_POSITION 5		// Defines the PackStatus byte position in the PackStatus CAN message
 #define PACK_STATUS_IDLE 0				// PackStatus byte value of 0 indicates that the accumulator is idle (AIRs are open)
-#define PACK_STATUS_PRECHARGE_START 1
-#define PACK_STATUS_PRECHARGING 2
-#define PACK_STATUS_ACTIVE 3
+#define PACK_STATUS_PRECHARGE_START 1	// PackStatus byte value of 1 indicates that precharging has begun (AIR- just closed)
+#define PACK_STATUS_PRECHARGING 2		// PackStatus byte value of 2 indicates that the accumulator is in the process of precharging
+#define PACK_STATUS_ACTIVE 3			// PackStatus byte value of 3 indicates that the accumulator is armed (both AIRs successfully closed)
 #define PACK_STATUS_CHARGING 4			// PackStatus byte value of 4 indicates that the accumulator is charging
-#define PACK_STATUS_CHARGING_COMPLETE 5
-#define PACK_STATUS_FAULT 6				// PackStatus byte value of 6 indicates a fault
+#define PACK_STATUS_CHARGING_COMPLETE 5	// PackStatus byte value of 5 indicates that the accumulator has finished charging
+#define PACK_STATUS_FAULT 6				// PackStatus byte value of 6 indicates a problem
 
 #endif

@@ -105,8 +105,6 @@ void error_loop(uint8_t errorCode, uint8_t *faultThermistors, uint8_t *faultCell
 	uint8_t thermistor17Status = 0;
 	uint8_t thermistor18Status = 0;
 
-	if(errorCode == ERROR_OVERHEAT || errorCode == ERROR_UNDERVOLT || errorCode == ERROR_OVERVOLT) { full_diagnosis(); }
-
 	msgFault[0] = moduleID;
 	msgFault[1] = errorCode;
 	msgFault[2] = faultComponent;

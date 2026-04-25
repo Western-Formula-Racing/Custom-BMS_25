@@ -1028,7 +1028,7 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 			while(attempts < ATTEMPT_LIMIT) {
 				if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO1, &RxHeader, RxData) == HAL_OK) {
 					if(RxHeader.StdId == CAN_PACK_STATUS_ID) {
-						if(RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_IDLE || RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_FAULT) {
+						if(RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_IDLE && RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_FAULT) {
 							force_refup();
 							wait(1);
 							*haltBalanceFlag = 0;
@@ -1136,7 +1136,7 @@ void balance_cycle(uint8_t *cellsToBalance, uint8_t cellsToBalanceQty, uint16_t 
 			while(attempts < ATTEMPT_LIMIT) {
 				if(HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO1, &RxHeader, RxData) == HAL_OK) {
 					if(RxHeader.StdId == CAN_PACK_STATUS_ID) {
-						if(RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_IDLE || RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_FAULT) {
+						if(RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_IDLE && RxData[PACK_STATUS_BYTE_POSITION] != PACK_STATUS_FAULT) {
 							*haltBalanceFlag = 0;
 						}
 					}
